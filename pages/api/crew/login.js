@@ -1,6 +1,12 @@
 import { supabase } from "../../../lib/supabase";
 
+export const config = {
+  runtime: "nodejs",
+};
+
 export default async function handler(req, res) {
+  console.log("=== LOGIN REQUEST START ===");
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -16,6 +22,12 @@ export default async function handler(req, res) {
     const deviceId = String(req.body?.deviceId || "").trim();
     const deviceName = String(req.body?.deviceName || "Crew Device").trim();
 
+    console.log("INPUT:", {
+      voucherCode,
+      deviceId,
+      deviceName,
+    });
+
     if (!voucherCode) {
       return res.status(400).json({
         success: false,
@@ -30,12 +42,17 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log("Calling Supabase RPC...");
+
     const { data, error } = await supabase.rpc("crew_voucher_login", {
       p_voucher_code: voucherCode,
       p_device_mac: deviceId,
       p_device_name: deviceName,
       p_ip_address: null,
     });
+
+    console.log("RPC RESPONSE:", data);
+    console.log("RPC ERROR:", error);
 
     if (error) {
       console.error("crew login rpc error:", error);
@@ -47,6 +64,8 @@ export default async function handler(req, res) {
 
     const result = Array.isArray(data) ? data[0] : data;
 
+    console.log("PARSED RESULT:", result);
+
     if (!result?.success) {
       return res.status(403).json({
         success: false,
@@ -56,6 +75,8 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log("LOGIN SUCCESS");
+
     return res.status(200).json({
       success: true,
       message: result.message,
@@ -63,11 +84,14 @@ export default async function handler(req, res) {
       session_id: result.session_id,
       gb_remaining: result.gb_remaining,
     });
+
   } catch (err) {
-    console.error("crew login api error:", err);
+    console.error("=== LOGIN CRASH ===");
+    console.error(err);
+
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: err.message || "Internal server error",
     });
   }
 }
