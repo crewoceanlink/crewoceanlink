@@ -98,16 +98,27 @@ export default async function handler(req, res) {
       const routerBytes = Number(routerRows?.[0]?.bytes_total || 0)
       const routerGB = routerBytes / 1024 / 1024 / 1024
 
-      const { data: starlinkRows, error: starlinkError } = await supabase
+const { data: starlinkRows, error: starlinkError } = await supabase
   .from('starlink_usage')
-  .select('bytes_total')
+  .select('bytes_total, timestamp')
   .eq('ship_id', ship.id)
-  .order('timestamp', { ascending: false })
-  .limit(1)
+  .order('timestamp', { ascending: true })
 
 if (starlinkError) throw starlinkError
 
-const starlinkBytes = Number(starlinkRows?.[0]?.bytes_total || 0)
+let starlinkBytes = 0
+
+for (let i = 1; i < (starlinkRows || []).length; i++) {
+  const prev = Number(starlinkRows[i - 1].bytes_total || 0)
+  const curr = Number(starlinkRows[i].bytes_total || 0)
+
+  if (curr >= prev) {
+    starlinkBytes += curr - prev
+  } else {
+    starlinkBytes += curr
+  }
+}
+
 const starlinkGB = starlinkBytes / 1024 / 1024 / 1024
 
       // High Usage Check: Verbrauch in den letzten 5 Minuten
@@ -200,7 +211,7 @@ const result = {
         const now = Date.now()
         const cooldownMs = 30 * 60 * 1000
 
-        if (now - lastSent > cooldownMs) {d
+        if (now - lastSent > cooldownMs) {
           globalThis.securityAlertCache[cacheKey] = now
           await sendTelegramSecurityAlert(result)
         }
