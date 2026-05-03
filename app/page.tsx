@@ -1417,7 +1417,8 @@ const getUsageCompareColor = (value, reference) => {
   const v = Number(value || 0);
   const r = Number(reference || 0);
 
-  if (r <= 0) return "text-gray-500";
+  // 🔹 NEU: Minimum Traffic → keine Bewertung
+  if (r < 0.5) return "text-gray-500";
 
   const deviation = Math.abs(v - r) / r;
 
