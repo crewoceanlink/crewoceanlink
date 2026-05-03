@@ -11,6 +11,13 @@ const [rates, setRates] = useState({
 });
 const [timeNow, setTimeNow] = useState(new Date());
 const [ships, setShips] = useState([]);
+const [securityChecks, setSecurityChecks] = useState([]);
+const [selectedShipIndex, setSelectedShipIndex] = useState(() => {
+  if (typeof window === "undefined") return 0;
+
+  const savedIndex = window.localStorage.getItem("selectedShipIndex");
+  return savedIndex ? Number(savedIndex) : 0;
+});
 const [timeFilter, setTimeFilter] = useState({
   mode: "current", // current | range | history
   start: "",
@@ -79,88 +86,541 @@ const getSelectedCycles = (subscriptionsData, shipId) => {
 
   return [];
 };
-const handleAddAddon = async () => {
-  const ship = ships?.[0] || null;
 
-  if (!ship || !ship.id) {
-    alert("Ship ID missing");
+const handleAddVessel = async () => {
+  const shipName = String(prompt("Ship name?") || "").trim();
+
+  if (!shipName) {
+    alert("Ship name is required");
     return;
   }
 
-  const gb = Number(prompt("Addon GB (z.B. 50)"));
-  const price = Number(prompt("Price EUR (z.B. 100)"));
+  const planType = String(prompt("Plan type? Allowed: small or large") || "")
+    .trim()
+    .toLowerCase();
 
-  if (!gb || !price) return;
-
-  const { error } = await supabase.from("addons").insert([
-  {
-    ship_id: ship.id,
-    gb: gb,
-    price_eur: price,
-    month: new Date().toISOString().slice(0, 7),
-  },
-]);
-
-  if (error) {
-    console.error(error);
-    alert("Error inserting addon");
+  if (!["small", "large"].includes(planType)) {
+    alert("Invalid plan type. Allowed: small or large");
     return;
   }
 
-  alert("Addon added");
+  const model = String(prompt("Revenue model? Allowed: M1, M2, M3") || "")
+    .trim()
+    .toUpperCase();
+
+  if (!["M1", "M2", "M3"].includes(model)) {
+    alert("Invalid model. Allowed: M1, M2, M3");
+    return;
+  }
+
+  const planGB = planType === "small" ? 50 : 500;
+  const planPriceEUR = planType === "small" ? 241 : 625;
+  const hardwareEUR = 908.71;
+
+  const confirmCreate = confirm(
+    `Create vessel?\n\n` +
+      `Name: ${shipName}\n` +
+      `Plan: ${planType}\n` +
+      `Model: ${model}\n` +
+      `Subscription: ${planGB} GB / ${planPriceEUR} EUR\n` +
+      `Hardware: ${hardwareEUR} EUR`
+  );
+
+  if (!confirmCreate) return;
+
+  const { data: shipData, error: shipError } = await supabase
+    .from("ships")
+    .insert([
+      {
+        name: shipName,
+        model: model,
+        plan_gb: planGB,
+        plan_price_eur: planPriceEUR,
+        hardware_eur: hardwareEUR,
+        used_gb: 0,
+        tracking_start_at: new Date().toISOString(),
+      },
+    ])
+    .select("*")
+    .single();
+
+  if (shipError || !shipData) {
+    console.error("VESSEL INSERT ERROR:", shipError);
+    alert(JSON.stringify(shipError, null, 2));
+    return;
+  }
+
+  const today = new Date();
+  const startDate = today.toISOString().split("T")[0];
+
+  const end = new Date(today);
+  end.setMonth(end.getMonth() + 1);
+  end.setDate(end.getDate() - 1);
+  const endDate = end.toISOString().split("T")[0];
+
+  const { error: subscriptionError } = await supabase
+    .from("subscriptions")
+    .insert([
+      {
+        ship_id: shipData.id,
+        gb: planGB,
+        price_eur: planPriceEUR,
+        start_date: startDate,
+        end_date: endDate,
+      },
+    ]);
+
+  if (subscriptionError) {
+    console.error("SUBSCRIPTION INSERT ERROR:", subscriptionError);
+    alert(
+      "Vessel created, but subscription failed:\n\n" +
+        JSON.stringify(subscriptionError, null, 2)
+    );
+    return;
+  }
+
+  alert(`${shipName} created successfully`);
+  window.localStorage.setItem("selectedShipIndex", String(selectedShipIndex));
   window.location.reload();
 };
-const handleAddVoucher = async () => {
-  // SAFETY: keine ships geladen → abbrechen
+
+const handleAddAddon = async () => {
   if (!ships || ships.length === 0) {
-    alert("No ship loaded yet");
+    alert("No ships loaded");
     return;
   }
 
-  const shipName = prompt("Ship name?");
-const ship = ships.find(s => s.name === shipName);
+  const shipName = prompt(
+    `Select ship:\n${ships.map((s) => s.name).join("\n")}`
+  );
 
-if (!ship) {
-  alert("Ship not found");
-  return;
-}
+  const ship = ships.find((s) => s.name === shipName);
 
-  // weitere safety checks
-  if (!ship.id) {
-    alert("Ship ID missing");
+  if (!ship) {
+    alert("Ship not found");
     return;
   }
 
-const allowedGbTypes =
-  ship.planType === "small"
-    ? ["1GB", "5GB"]
-    : ["1GB", "5GB", "10GB"];
+  const gb = Number(prompt("Addon GB? Allowed: 50 or 500"));
 
-const gbType = prompt(`GB Type? (${allowedGbTypes.join(", ")})`);
-if (!gbType) return;
+  if (![50, 500].includes(gb)) {
+    alert("Invalid addon GB. Allowed: 50 or 500");
+    return;
+  }
 
-if (!allowedGbTypes.includes(gbType)) {
-  alert(`Invalid GB Type for ${ship.planType}. Allowed: ${allowedGbTypes.join(", ")}`);
-  return;
-}
+  const priceEUR = gb === 50 ? 96 : 480;
 
-  const { error } = await supabase.from("vouchers").insert([
+  const confirmAdd = confirm(
+    `Create addon for ${ship.name}?\n\n${gb} GB\n${priceEUR} EUR`
+  );
+
+  if (!confirmAdd) return;
+
+  const { error } = await supabase.from("addons").insert([
     {
       ship_id: ship.id,
-      gb_type: gbType,
-amount: amount,
-month: new Date().toISOString().slice(0, 7),
+      gb: gb,
+      price_eur: priceEUR,
     },
   ]);
 
   if (error) {
-  alert(JSON.stringify(error));
+    console.error("ADDON INSERT ERROR:", error);
+    alert(JSON.stringify(error, null, 2));
+    return;
+  }
+
+  alert(`${gb} GB addon added for ${ship.name}`);
+  window.location.reload();
+};
+const generateVoucherCode = () => {
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
+};
+
+const handleLogout = async () => {
+  await fetch("/api/admin/logout", {
+    method: "POST",
+  });
+
+  window.location.href = "/admin-login";
+};
+
+const handleAddVoucher = async () => {
+  if (!ships || ships.length === 0) {
+    alert("No ships loaded");
+    return;
+  }
+
+  const shipName = prompt(
+    `Select ship:\n${ships.map((s) => s.name).join("\n")}`
+  );
+
+  const ship = ships.find((s) => s.name === shipName);
+
+  if (!ship) {
+    alert("Ship not found");
+    return;
+  }
+
+  const rawPlanType =
+    ship.planType ||
+    ship.plan_type ||
+    (ship.plan?.name?.toLowerCase().includes("mini") ? "small" : "large");
+
+  const planType = String(rawPlanType).toLowerCase();
+
+  if (!["small", "large"].includes(planType)) {
+    alert("Invalid plan type");
+    return;
+  }
+
+  const allowedTypes =
+    planType === "small"
+      ? ["1GB", "5GB", "10GB", "20GB", "50GB"]
+      : ["1GB", "5GB", "10GB", "20GB", "50GB"];
+
+  const gbType = prompt(
+    `GB Type? Allowed for ${planType}: ${allowedTypes.join(", ")}`
+  );
+
+  if (!allowedTypes.includes(gbType)) {
+    alert(`${gbType} is not allowed for ${planType}`);
+    return;
+  }
+
+  const amount = Number(prompt("How many vouchers?"));
+
+  if (!amount || amount <= 0) {
+    alert("Invalid amount");
+    return;
+  }
+
+  const gbTotals = {
+    "1GB": 1,
+    "5GB": 5,
+    "10GB": 10,
+    "20GB": 20,
+    "50GB": 50,
+  };
+
+  const requestedGB = gbTotals[gbType] * amount;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const { data: subscriptionsData, error: subscriptionsError } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("ship_id", ship.id);
+
+  if (subscriptionsError) {
+    console.error("SUBSCRIPTIONS LOAD ERROR:", subscriptionsError);
+    alert(JSON.stringify(subscriptionsError, null, 2));
+    return;
+  }
+
+  const subscriptions = (subscriptionsData || [])
+    .map((s) => {
+      const [sy, sm, sd] = s.start_date.split("-");
+      const [ey, em, ed] = s.end_date.split("-");
+
+      const start = new Date(Number(sy), Number(sm) - 1, Number(sd));
+      const end = new Date(Number(ey), Number(em) - 1, Number(ed));
+
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+
+      return {
+        ...s,
+        start,
+        end,
+      };
+    })
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const currentCycle = subscriptions.find((s) => {
+    return today >= s.start && today <= s.end;
+  });
+
+  if (!currentCycle) {
+    alert("No active subscription cycle found for this ship.");
+    return;
+  }
+
+  const previousCycles = subscriptions.filter((s) => s.end < currentCycle.start);
+  const previousCycle = previousCycles.length
+    ? previousCycles[previousCycles.length - 1]
+    : null;
+
+  const { data: addonsData, error: addonsError } = await supabase
+    .from("addons")
+    .select("*")
+    .eq("ship_id", ship.id);
+
+  if (addonsError) {
+    console.error("ADDONS LOAD ERROR:", addonsError);
+    alert(JSON.stringify(addonsError, null, 2));
+    return;
+  }
+
+  const { data: vouchersData, error: vouchersError } = await supabase
+    .from("crew_vouchers")
+    .select("*")
+    .eq("ship_id", ship.id);
+
+  if (vouchersError) {
+    console.error("VOUCHERS LOAD ERROR:", vouchersError);
+    alert(JSON.stringify(vouchersError, null, 2));
+    return;
+  }
+
+let allUsage = [];
+let from = 0;
+const pageSize = 1000;
+
+while (true) {
+  let query = supabase
+    .from("router_usage")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  // 🔹 Nur wenn ship.id existiert → filtern
+  if (typeof ship !== "undefined" && ship?.id) {
+    query = query.eq("ship_id", ship.id);
+  }
+
+  const { data, error } = await query.range(from, from + pageSize - 1);
+
+  if (error) {
+    console.error("USAGE LOAD ERROR:", error);
+    return;
+  }
+
+  if (!data || data.length === 0) break;
+
+  allUsage = allUsage.concat(data);
+
+  if (data.length < pageSize) break;
+
+  from += pageSize;
+}
+
+const usageData = allUsage;
+
+console.log("TOTAL USAGE LOADED:", usageData.length);
+
+  const getVoucherGB = (v) => {
+    if (typeof v.gb_total === "number") return Number(v.gb_total || 0);
+    if (v.voucher_type === "1GB") return 1;
+    if (v.voucher_type === "5GB") return 5;
+    if (v.voucher_type === "10GB") return 10;
+    if (v.voucher_type === "20GB") return 20;
+    if (v.voucher_type === "50GB") return 50;
+    return 0;
+  };
+
+  const isDateInCycle = (dateValue, cycle) => {
+    if (!dateValue || !cycle) return false;
+
+    const date = new Date(dateValue);
+    date.setHours(0, 0, 0, 0);
+
+    return date >= cycle.start && date <= cycle.end;
+  };
+
+  const getUsedGBForCycle = (cycle) => {
+    if (!cycle) return 0;
+
+    const cycleEntries = (usageData || [])
+      .filter((u) => {
+        const created = new Date(u.created_at);
+        return created >= cycle.start && created <= cycle.end;
+      })
+      .sort((a, b) => {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+    if (cycleEntries.length === 0) return 0;
+
+    let usedBytes = 0;
+
+    for (let i = 1; i < cycleEntries.length; i++) {
+      const prev = Number(cycleEntries[i - 1].bytes_total || 0);
+      const curr = Number(cycleEntries[i].bytes_total || 0);
+      const diff = curr - prev;
+
+      if (diff > 0) {
+        usedBytes += diff;
+      }
+    }
+
+    return Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2));
+  };
+
+  const currentAddonGB = (addonsData || [])
+    .filter((a) => isDateInCycle(a.created_at, currentCycle))
+    .reduce((sum, a) => sum + Number(a.gb || 0), 0);
+
+  let carryOverGB = 0;
+
+  if (previousCycle) {
+    const previousSoldGB = (vouchersData || [])
+      .filter((v) => isDateInCycle(v.created_at, previousCycle))
+      .reduce((sum, v) => sum + getVoucherGB(v), 0);
+
+    const previousUsedGB = getUsedGBForCycle(previousCycle);
+
+    carryOverGB = previousSoldGB - previousUsedGB;
+
+    if (carryOverGB < 0) carryOverGB = 0;
+  }
+
+  const openStatuses = ["active", "issued", "unused"];
+
+  const currentOpenVoucherGB = (vouchersData || [])
+    .filter((v) => {
+      if (!isDateInCycle(v.created_at, currentCycle)) return false;
+      return openStatuses.includes(String(v.status || "").toLowerCase());
+    })
+    .reduce((sum, v) => {
+      const total = getVoucherGB(v);
+      const used = Number(v.gb_used || 0);
+      const remaining = total - used;
+
+      return sum + (remaining > 0 ? remaining : 0);
+    }, 0);
+
+  const subscriptionGB = Number(currentCycle.gb || 0);
+
+  const sellableGB = Number(
+    (
+      subscriptionGB +
+      currentAddonGB -
+      carryOverGB -
+      currentOpenVoucherGB
+    ).toFixed(2)
+  );
+
+  if (requestedGB > sellableGB) {
+    const missingGB = Number((requestedGB - sellableGB).toFixed(2));
+
+    alert(
+      "Not enough data capacity. Please add an add-on before creating this voucher.\n\n" +
+        `Available: ${sellableGB} GB\n` +
+        `Requested: ${requestedGB} GB\n` +
+        `Missing: ${missingGB} GB`
+    );
+
+    return;
+  }
+
+  const revenueModel = ship.model;
+
+  if (!["M1", "M2", "M3"].includes(revenueModel)) {
+    alert("Invalid revenue share model");
+    return;
+  }
+
+  const revenueShare =
+    revenueModel === "M1" ? 0.75 :
+    revenueModel === "M2" ? 0.80 :
+    1.00;
+
+  const crewPrices = {
+    small: {
+      "1GB": 6.5,
+      "5GB": 31,
+      "10GB": 60,
+      "20GB": 116,
+      "50GB": 285,
+    },
+    large: {
+      "1GB": 4.9,
+      "5GB": 23,
+      "10GB": 42,
+      "20GB": 80,
+      "50GB": 190,
+    },
+  };
+
+  const crewPriceUSD = crewPrices[planType][gbType];
+  const yourRevenueUSD = Number((crewPriceUSD * revenueShare).toFixed(2));
+
+  const vouchers = [];
+
+  for (let i = 0; i < amount; i++) {
+    vouchers.push({
+      ship_id: ship.id,
+      subscription_cycle_id: null,
+      voucher_code: generateVoucherCode(),
+      voucher_type: gbType,
+      plan_type: planType,
+      gb_total: gbTotals[gbType],
+      gb_used: 0,
+      crew_price_usd: crewPriceUSD,
+      revenue_share_model: revenueModel,
+      your_revenue_usd: yourRevenueUSD,
+      status: "active",
+      created_by: "admin",
+      notes: "batch created",
+    });
+  }
+
+  const { error } = await supabase
+    .from("crew_vouchers")
+    .insert(vouchers);
+
+if (error) {
+  console.error("FULL ERROR:", error);
+  alert(JSON.stringify(error, null, 2));
   return;
 }
 
-  alert("Voucher added");
+try {
+  await fetch("/api/router/mikrotik-vouchers", {
+    method: "GET",
+    headers: {
+      "x-router-sync-token": process.env.NEXT_PUBLIC_ROUTER_SYNC_TOKEN || "",
+    },
+  });
+} catch (syncError) {
+  console.error("MIKROTIK VOUCHER SYNC ERROR:", syncError);
+}
 
-  // sauberer reload (kein dirty hack)
+const codesArray = vouchers.map(v => v.voucher_code);
+  const codesText = codesArray.join("\n");
+
+  try {
+    const res = await fetch("/api/admin/send-voucher-telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        shipName: ship.name,
+        gbType: gbType,
+        amount: amount,
+        codes: codesArray,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Telegram API ERROR:", data);
+      alert("Telegram failed: " + JSON.stringify(data));
+    } else {
+      console.log("Telegram sent:", data);
+    }
+  } catch (err) {
+    console.error("Telegram fetch crashed:", err);
+    alert("Telegram crashed");
+  }
+
+  alert(
+    `${amount} vouchers created:\n\n${codesText}`
+  );
+
   window.location.reload();
 };
 
@@ -235,7 +695,9 @@ const getSoldGB = (ship) => {
   return (
     (ship.vouchers["1GB"] || 0) * 1 +
     (ship.vouchers["5GB"] || 0) * 5 +
-    (ship.vouchers["10GB"] || 0) * 10
+    (ship.vouchers["10GB"] || 0) * 10 +
+    (ship.vouchers["20GB"] || 0) * 20 +
+    (ship.vouchers["50GB"] || 0) * 50
   );
 };
 
@@ -244,9 +706,9 @@ const getLostGB = (ship) => {
     ship.plan.gb +
     ship.addons.reduce((sum, a) => sum + (a.gb || 0), 0);
 
-  const usedGB = Number(ship.usedGB || 0);
+  const soldGB = getSoldGB(ship);
 
-  const lostGB = paidGB - usedGB;
+  const lostGB = paidGB - soldGB;
 
   return lostGB > 0 ? Number(lostGB.toFixed(2)) : 0;
 };
@@ -286,8 +748,10 @@ const getCrewPricesUSD = (ship) => {
   if (ship.planType === "small") {
     return {
       "1GB": 6.5,
-      "5GB": 30,
-      "10GB": 55,
+      "5GB": 31,
+      "10GB": 60,
+      "20GB": 116,
+      "50GB": 285,
     };
   }
 
@@ -295,6 +759,8 @@ const getCrewPricesUSD = (ship) => {
     "1GB": 4.9,
     "5GB": 23,
     "10GB": 42,
+    "20GB": 80,
+    "50GB": 190,
   };
 };
 
@@ -306,6 +772,8 @@ const getYourPricesUSD = (ship) => {
       "1GB": crewPrices["1GB"] * 0.75,
       "5GB": crewPrices["5GB"] * 0.75,
       "10GB": crewPrices["10GB"] * 0.75,
+      "20GB": crewPrices["20GB"] * 0.75,
+      "50GB": crewPrices["50GB"] * 0.75,
     };
   }
 
@@ -314,6 +782,8 @@ const getYourPricesUSD = (ship) => {
       "1GB": crewPrices["1GB"] * 0.80,
       "5GB": crewPrices["5GB"] * 0.80,
       "10GB": crewPrices["10GB"] * 0.80,
+      "20GB": crewPrices["20GB"] * 0.80,
+      "50GB": crewPrices["50GB"] * 0.80,
     };
   }
 
@@ -328,7 +798,9 @@ const getRevenueUSD = (ship) => {
   const revenue =
     (ship.vouchers["1GB"] || 0) * prices["1GB"] +
     (ship.vouchers["5GB"] || 0) * prices["5GB"] +
-    (ship.vouchers["10GB"] || 0) * prices["10GB"];
+    (ship.vouchers["10GB"] || 0) * prices["10GB"] +
+    (ship.vouchers["20GB"] || 0) * prices["20GB"] +
+    (ship.vouchers["50GB"] || 0) * prices["50GB"];
 
   return revenue;
 };
@@ -499,14 +971,40 @@ if (subscriptionsError) {
 
 console.log("SUBSCRIPTIONS:", subscriptionsData);
 
-const { data: usageData, error: usageError } = await supabase
-  .from("router_usage")
-  .select("*");
+let allUsage = [];
+let from = 0;
+const pageSize = 1000;
 
-if (usageError) {
-  console.error(usageError);
-  return;
+while (true) {
+  let query = supabase
+    .from("router_usage")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  // 🔹 Nur wenn ship.id existiert → filtern
+  if (typeof ship !== "undefined" && ship?.id) {
+    query = query.eq("ship_id", ship.id);
+  }
+
+  const { data, error } = await query.range(from, from + pageSize - 1);
+
+  if (error) {
+    console.error("USAGE LOAD ERROR:", error);
+    return;
+  }
+
+  if (!data || data.length === 0) break;
+
+  allUsage = allUsage.concat(data);
+
+  if (data.length < pageSize) break;
+
+  from += pageSize;
 }
+
+const usageData = allUsage;
+
+console.log("TOTAL USAGE LOADED:", usageData.length);
 
 let routerStatusData = [];
 
@@ -576,13 +1074,24 @@ const { data: addonsData, error: addonsError } = await supabase
 }
 
 const { data: vouchersData, error: vouchersError } = await supabase
-  .from("vouchers")
+  .from("crew_vouchers")
   .select("*");
 
 if (vouchersError) {
   console.error(vouchersError);
   return;
 }
+
+const { data: starlinkUsageData, error: starlinkUsageError } = await supabase
+  .from("starlink_usage")
+  .select("*");
+
+if (starlinkUsageError) {
+  console.error("STARLINK USAGE LOAD ERROR:", starlinkUsageError);
+  return;
+}
+
+console.log("STARLINK USAGE:", starlinkUsageData);
 
 console.log("SHIPS:", shipsData);
 console.log("VOUCHERS:", vouchersData);
@@ -593,7 +1102,7 @@ console.log("VOUCHERS:", vouchersData);
 const relevantSubs = getSelectedCycles(subscriptionsData, ship.id);
 
 const shipUsageAll = usageData
-  .filter((u) => String(u.ship_id) === String(ship.id))
+  .filter((u) => u.ship_id === ship.id)
   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const usageDebug = relevantSubs.map((sub) => {
@@ -617,53 +1126,76 @@ const shipUsageAll = usageData
 console.log("USED DEBUG:", usageDebug);
 
 const usedBytes = relevantSubs.reduce((sum, sub) => {
-  const cycleEntries = shipUsageAll.filter((u) => {
-    const created = new Date(u.created_at);
-    return created >= sub.start && created <= sub.end;
-  });
+const cycleEntries = shipUsageAll.filter((u) => {
+  const created = new Date(u.created_at);
+
+return created >= sub.start && created <= sub.end;
+});
 
   if (cycleEntries.length === 0) return sum;
 
-  let cycleUsed = 0;
+if (cycleEntries.length === 0) return sum;
 
-  for (let i = 1; i < cycleEntries.length; i++) {
-    const prev = Number(cycleEntries[i - 1].bytes_total || 0);
-    const curr = Number(cycleEntries[i].bytes_total || 0);
+const first = Number(cycleEntries[0].bytes_total || 0);
+const last = Number(cycleEntries[cycleEntries.length - 1].bytes_total || 0);
 
-    const diff = curr - prev;
+const cycleUsed = last - first;
 
-    if (diff > 0) {
-      cycleUsed += diff;
-    }
-  }
-
-  return sum + cycleUsed;
+return sum + (cycleUsed > 0 ? cycleUsed : 0);
 }, 0);
 
 usedGB = Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2));
+
+const shipStarlinkAll = (starlinkUsageData || [])
+  .filter((u) => u.ship_id === ship.id)
+  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+const latestStarlinkEntry = shipStarlinkAll[shipStarlinkAll.length - 1] || null;
+
+const starlinkBytes = Number(latestStarlinkEntry?.bytes_total || 0);
+
+const starlinkGB = Number((starlinkBytes / (1024 * 1024 * 1024)).toFixed(2));
+
+console.log("ADMIN USED DEBUG:", {
+  ship: ship.name,
+  shipId: ship.id,
+  usageRows: shipUsageAll.length,
+  firstUsage: shipUsageAll[0],
+  lastUsage: shipUsageAll[shipUsageAll.length - 1],
+  usedBytes,
+  usedGB,
+});
 
 console.log("RELEVANT SUBS:", relevantSubs);
 
 const totalPlanGB = relevantSubs.reduce((sum, s) => sum + (s.gb || 0), 0);
 const totalPlanEUR = relevantSubs.reduce((sum, s) => sum + (s.price_eur || 0), 0);
 
-const soldGB = vouchersData
-  .filter((v) => {
-    if (v.ship_id !== ship.id) return false;
+const shipVouchersForSelectedCycles = vouchersData.filter((v) => {
+  if (v.ship_id !== ship.id) return false;
 
-    const created = new Date(v.created_at);
-    created.setHours(0, 0, 0, 0);
+  const created = new Date(v.created_at);
+  created.setHours(0, 0, 0, 0);
 
-    return relevantSubs.some((sub) => {
-      return created >= sub.start && created <= sub.end;
-    });
-  })
-  .reduce((sum, v) => {
-    if (v.gb_type === "1GB") return sum + v.amount * 1;
-    if (v.gb_type === "5GB") return sum + v.amount * 5;
-    if (v.gb_type === "10GB") return sum + v.amount * 10;
-    return sum;
-  }, 0);
+  return relevantSubs.some((sub) => {
+    return created >= sub.start && created <= sub.end;
+  });
+});
+
+const soldGB = shipVouchersForSelectedCycles.reduce((sum, v) => {
+  if (v.voucher_type === "1GB") return sum + 1;
+  if (v.voucher_type === "5GB") return sum + 5;
+  if (v.voucher_type === "10GB") return sum + 10;
+  if (v.voucher_type === "20GB") return sum + 20;
+  if (v.voucher_type === "50GB") return sum + 50;
+  return sum;
+}, 0);
+
+const voucherUsedGB = Number(
+  shipVouchersForSelectedCycles
+    .reduce((sum, v) => sum + Number(v.gb_used || 0), 0)
+    .toFixed(2)
+);
 
 let carryOverGB = soldGB - usedGB;
 
@@ -688,14 +1220,16 @@ const routerOnline =
 const starlinkOnline =
   latestStatus?.starlink_online === true && isFreshStatus(lastSeenStarlink);
 
+  const mappedPlanType = Number(ship.plan_gb) >= 500 ? "large" : "small";
+
   return {
     id: ship.id,
     name: ship.name,
     model: ship.model,
-    planType: "small",
+    planType: mappedPlanType,
 
 plan: {
-  name: "Global Priority Mini",
+  name: mappedPlanType === "large" ? "Global Priority 500GB" : "Global Priority 50",
   gb: totalPlanGB,
   priceEUR: totalPlanEUR,
 },
@@ -726,11 +1260,13 @@ vouchers: (() => {
   });
 
   return shipVouchers.reduce((acc, v) => {
-    acc[v.gb_type] = (acc[v.gb_type] || 0) + v.amount;
+    acc[v.voucher_type] = (acc[v.voucher_type] || 0) + 1;
     return acc;
   }, {});
 })(),
 usedGB: usedGB,
+voucherUsedGB: voucherUsedGB,
+starlinkGB: starlinkGB,
 routerOnline,
 starlinkOnline,
 lastSeenRouter,
@@ -754,14 +1290,32 @@ lastSeenStarlink
     console.log("VOUCHERS:", data);
 };
 
+const loadSecurityChecks = async () => {
+  try {
+    const res = await fetch("/api/admin/security-check");
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      console.error("SECURITY CHECK LOAD ERROR:", data);
+      return;
+    }
+
+    setSecurityChecks(data.ships || []);
+  } catch (err) {
+    console.error("SECURITY CHECK FETCH ERROR:", err);
+  }
+};
+
 useEffect(() => {
   loadShips();
   loadVouchers();
+  loadSecurityChecks();
 }, [timeFilter]);
 
 useEffect(() => {
   const interval = setInterval(() => {
     loadShips();
+    loadSecurityChecks();
   }, 30000);
 
   return () => clearInterval(interval);
@@ -776,7 +1330,51 @@ const getTime = (timeZone) => {
   });
 };
 
-if (!ships.length) return null;
+const selectedShip = ships[selectedShipIndex] || ships[0];
+
+const selectedSecurity = selectedShip
+  ? securityChecks.find((s) => String(s.ship_id) === String(selectedShip.id))
+  : null;
+
+const securityStatus =
+  selectedSecurity?.status === "RED" || selectedSecurity?.high_usage_status === "RED"
+    ? "RED"
+    : selectedSecurity?.status === "YELLOW" || selectedSecurity?.high_usage_status === "YELLOW"
+      ? "YELLOW"
+      : selectedSecurity
+        ? "GREEN"
+        : "UNKNOWN";
+
+const securityColor =
+  securityStatus === "GREEN"
+    ? "bg-green-400"
+    : securityStatus === "YELLOW"
+      ? "bg-yellow-400"
+      : securityStatus === "RED"
+        ? "bg-red-500"
+        : "bg-gray-400";
+
+const getUsageCompareColor = (value, reference) => {
+  const v = Number(value || 0);
+  const r = Number(reference || 0);
+
+  if (r <= 0) return "text-gray-500";
+
+  const deviation = Math.abs(v - r) / r;
+
+  if (deviation <= 0.02) return "text-green-600";
+  if (deviation <= 0.05) return "text-yellow-600";
+  return "text-red-600";
+};
+
+const securityLabel =
+  securityStatus === "GREEN"
+    ? "Healthy"
+    : securityStatus === "YELLOW"
+      ? "Warning"
+      : securityStatus === "RED"
+        ? "Critical"
+        : "Unknown";
 
   return (
     <div className="h-screen w-full relative text-white">
@@ -797,9 +1395,18 @@ if (!ships.length) return null;
           CrewOceanLink
         </h1>
 
-        <span className="text-white/60 text-4xl">
-          Admin Dashboard
-        </span>
+<div className="flex items-center gap-4">
+  <span className="text-white/60 text-4xl">
+    Admin Dashboard
+  </span>
+
+  <button
+    onClick={handleLogout}
+    className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition text-sm text-white border border-white/20"
+  >
+    Logout
+  </button>
+</div>
       </div>
 
       {/* Content */}
@@ -817,27 +1424,46 @@ p-10
 
 {/* Toolbar */}
 <div className="mb-8">
-  <div className="flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/20 w-between">
+  <div className="flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/20 w-full flex-nowrap overflow-hidden">
 
-    <div className="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition text-sm">
+<div
+  onClick={handleAddVessel}
+  className="px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 transition text-sm whitespace-nowrap shrink-0 cursor-pointer"
+>
   + Vessel
 </div>
 
-    <div
+<div
   onClick={handleAddAddon}
-  className="px-4 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition text-sm cursor-pointer"
+  className="px-5 py-2 rounded-full bg-white/20 hover:bg-white/30 transition text-sm cursor-pointer whitespace-nowrap shrink-0"
 >
   + Addon GB
 </div>
 
-    <div
+<div
   onClick={handleAddVoucher}
-  className="px-4 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition text-sm cursor-pointer"
+  className="px-5 py-2 rounded-full bg-white/20 hover:bg-white/30 transition text-sm cursor-pointer whitespace-nowrap shrink-0"
 >
-  + Sold GB
+  + Voucher
 </div>
 
-<div className="ml-40 flex items-center gap-6 text-xs text-white/80">
+<select
+  value={selectedShipIndex}
+  onChange={(e) => {
+  const index = Number(e.target.value);
+  setSelectedShipIndex(index);
+  window.localStorage.setItem("selectedShipIndex", String(index));
+}}
+  className="px-5 py-2 rounded-full bg-white/20 hover:bg-white/30 transition text-sm text-white border border-white/20 outline-none cursor-pointer whitespace-nowrap shrink-0 appearance-none"
+>
+  {ships.map((ship, index) => (
+    <option key={ship.id} value={index} className="bg-neutral-900 text-white">
+      {ship.name}
+    </option>
+  ))}
+</select>
+
+<div className="ml-auto flex items-center gap-6 text-xs text-white/80 whitespace-nowrap shrink-0">
 
   <div className="flex items-center gap-1">
     <span className="text-white">USD/EUR</span>
@@ -913,229 +1539,271 @@ border border-white/15
 shadow-inner
 ">
    <div className="p-6 h-full overflow-y-auto">
-<div className="flex items-center gap-97 text-white/80 text-sm mb-3 tracking-wide">
+<div className="flex items-center text-white/80 text-sm mb-3 tracking-wide whitespace-nowrap overflow-hidden">
 
-  {/* LEFT: Ship Info */}
-  <div>
-    {ships[0] && (
+  {/* LEFT */}
+  <div className="w-[20%] overflow-hidden text-ellipsis">
+    {selectedShip && (
       <>
-        {ships[0].name} | {ships[0].model} | {ships[0].plan.name}
+        {selectedShip.name} | {selectedShip.model} | {selectedShip.plan.name}
       </>
     )}
   </div>
 
-  {/* RIGHT: FILTER UI */}
-<div className="flex items-center gap-2 flex-wrap">
-  <span className="text-white/80 text-sm mr-3">Time Period</span>
+  {/* TIME PERIOD */}
+  <div className="w-[28%] flex items-center gap-2">
+    <span className="shrink-0">Time Period</span>
 
-  {/* MODE SELECT */}
-  <select
-    value={timeFilter.mode}
-    onChange={(e) =>
-      setTimeFilter({
-        ...timeFilter,
-        mode: e.target.value,
-      })
-    }
-    className="bg-white text-black text-xs px-2 py-1 rounded border border-white/20"
-  >
-    <option value="current">Current Cycle</option>
-    <option value="range">Custom Range</option>
-    <option value="history">Cycle History</option>
-  </select>
-
-  {/* HISTORY SELECT */}
-  {timeFilter.mode === "history" && (
     <select
-      value={timeFilter.historyCount}
+      value={timeFilter.mode}
       onChange={(e) =>
         setTimeFilter({
           ...timeFilter,
-          historyCount: Number(e.target.value),
+          mode: e.target.value,
         })
       }
-      className="bg-white text-black text-xs px-2 py-1 rounded border border-white/20"
+      className="bg-white text-black text-xs px-2 py-1 rounded border border-white/20 shrink-0"
     >
-      <option value={1}>Last 1 Cycle</option>
-      <option value={3}>Last 3 Cycles</option>
-      <option value={6}>Last 6 Cycles</option>
-      <option value={999}>All Cycles</option>
+      <option value="current">Current Cycle</option>
+      <option value="range">Custom Range</option>
+      <option value="history">Cycle History</option>
     </select>
-  )}
 
-  {/* DATE RANGE */}
-  {timeFilter.mode === "range" && (
-    <>
-      <input
-        type="date"
-        value={timeFilter.start || ""}
+    {timeFilter.mode === "history" && (
+      <select
+        value={timeFilter.historyCount}
         onChange={(e) =>
           setTimeFilter({
             ...timeFilter,
-            start: e.target.value,
+            historyCount: Number(e.target.value),
           })
         }
-        className="bg-white/10 text-white text-xs px-2 py-1 rounded border border-white/20"
-      />
-      <input
-        type="date"
-        value={timeFilter.end || ""}
-        onChange={(e) =>
-          setTimeFilter({
-            ...timeFilter,
-            end: e.target.value,
-          })
-        }
-        className="bg-white/10 text-white text-xs px-2 py-1 rounded border border-white/20"
-      />
-    </>
-  )}
+        className="bg-white text-black text-xs px-2 py-1 rounded border border-white/20 shrink-0"
+      >
+        <option value={1}>Last 1 Cycle</option>
+        <option value={3}>Last 3 Cycles</option>
+        <option value={6}>Last 6 Cycles</option>
+        <option value={999}>All Cycles</option>
+      </select>
+    )}
 
-  {ships[0] && (
-    <>
-      <div className="ml-25 flex items-center gap-1.5 text-sm text-white/85 whitespace-nowrap">
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${
-            ships[0].routerOnline ? "bg-green-400" : "bg-red-400"
-          }`}
-        ></span>
-        <span>
-          Router: {ships[0].routerOnline ? "Online" : "Offline"} • Last seen {formatLastSeen(ships[0].lastSeenRouter)}
-        </span>
-      </div>
+    {timeFilter.mode === "range" && (
+      <>
+        <input
+          type="date"
+          value={timeFilter.start || ""}
+          onChange={(e) =>
+            setTimeFilter({
+              ...timeFilter,
+              start: e.target.value,
+            })
+          }
+          className="bg-white/10 text-white text-xs px-2 py-1 rounded border border-white/20 shrink-0"
+        />
+        <input
+          type="date"
+          value={timeFilter.end || ""}
+          onChange={(e) =>
+            setTimeFilter({
+              ...timeFilter,
+              end: e.target.value,
+            })
+          }
+          className="bg-white/10 text-white text-xs px-2 py-1 rounded border border-white/20 shrink-0"
+        />
+      </>
+    )}
+  </div>
 
-      <div className="ml-3 flex items-center gap-1.5 text-sm text-white/85 whitespace-nowrap">
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${
-            ships[0].starlinkOnline ? "bg-green-400" : "bg-red-400"
-          }`}
-        ></span>
-        <span>
-          Starlink: {ships[0].starlinkOnline ? "Online" : "Offline"} • Last seen {formatLastSeen(ships[0].lastSeenStarlink)}
-        </span>
-      </div>
-    </>
-  )}
+  {/* STATUS */}
+  <div className="w-[52%] flex items-center justify-start gap-4 overflow-hidden whitespace-nowrap text-xs xl:text-sm pl-8">
+
+    {selectedShip && (
+      <>
+        <div className="flex items-center gap-1.5 shrink-0 text-white/85">
+          <span className={`inline-block w-2 h-2 rounded-full ${selectedShip.routerOnline ? "bg-green-400" : "bg-red-400"}`}></span>
+          <span>
+            Router: {selectedShip.routerOnline ? "Online" : "Offline"} · {formatLastSeen(selectedShip.lastSeenRouter)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 text-white/85">
+          <span className={`inline-block w-2 h-2 rounded-full ${selectedShip.starlinkOnline ? "bg-green-400" : "bg-red-400"}`}></span>
+          <span>
+            Starlink: {selectedShip.starlinkOnline ? "Online" : "Offline"} · {formatLastSeen(selectedShip.lastSeenStarlink)}
+          </span>
+        </div>
+
+        <div
+title={
+  selectedSecurity
+    ? `Overall Status: ${securityStatus}
+
+Voucher Usage: ${selectedSecurity.voucher_gb} GB
+Router Usage: ${selectedSecurity.router_gb} GB
+Starlink Usage: ${selectedSecurity.starlink_gb || 0} GB
+
+Deviation: ${selectedSecurity.deviation_percent}%
+Deviation Status: ${selectedSecurity.status}
+
+High Usage 5min: ${selectedSecurity.high_usage_gb_5min} GB
+High Usage Status: ${selectedSecurity.high_usage_status}`
+    : "Security check not loaded"
+}
+          className="flex items-center gap-1.5 shrink-0 text-white/85 cursor-help"
+        >
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${securityColor} ${
+              securityStatus === "RED" ? "animate-pulse scale-125" : ""
+            }`}
+          ></span>
+          <span>
+            Security: {securityLabel}
+            {selectedSecurity
+              ? selectedSecurity.high_usage_status === "RED"
+                ? ` · High Usage ${selectedSecurity.high_usage_gb_5min} GB`
+                : selectedSecurity.status === "RED" || selectedSecurity.status === "YELLOW"
+                  ? ` · Deviation ${selectedSecurity.deviation_percent}%`
+                  : ""
+              : ""}
+          </span>
+        </div>
+      </>
+    )}
+
+  </div>
+
 </div>
-</div>
-<div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
-
-  {Array.from({ length: 15 }).map((_, i) => (
-    <div
-      key={i}
-className="rounded-xl bg-white/[0.8] backdrop-blur-lg px-4 py-2 border border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.25)] flex flex-col justify-center transition-all duration-200 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)] hover:-translate-y-[2px]"
-    >
-      <div className="text-gray-500 text-sm mb-1">
-        {[
-          "Subscription + Addon (GB)",
-          "Vouchers Sold (GB)",
-          "Used Data (GB)",
-          "Carry Over (GB)",
-          "Lost GB",
-          "Revenue ($)",
-          "Operating Cost ($)",
-          "Hardware Cost ($)",
-          "Net Profit ($)",
-          "ROI (%)",
-          "Usage Rate (%)",
-          "Break-even Status",
-          "Break-even (GB)",
-          "Break-even (Cycles)",
-          "Lost Revenue ($)"
-        ][i]}
-      </div>
-
+{selectedShip ? (
+  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
+    {Array.from({ length: 15 }).map((_, i) => (
       <div
-        className={`font-semibold text-lg ${
-          i === 8
-            ? Number(getNetProfitUSD(ships[0])) < 0
-              ? "text-red-500"
-              : "text-green-500"
-            : i === 9
-              ? Number(getROI(ships[0]).replace("%", "")) < 0
+        key={i}
+className="rounded-xl bg-white/[0.8] backdrop-blur-lg px-4 py-3 border border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.25)] min-h-[88px] flex flex-col justify-start transition-all duration-200 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)] hover:-translate-y-[2px]"
+      >
+        <div className="text-gray-500 text-sm mb-1">
+          {[
+            "Subscription + Addon (GB)",
+            "Vouchers Sold (GB)",
+            "Used Data (GB)",
+            "Carry Over (GB)",
+            "Lost GB",
+            "Our Revenue ($)",
+            "Operating Cost ($)",
+            "Hardware Investment ($)",
+            "Net Profit ($)",
+            "ROI (%)",
+            "Usage Rate (%)",
+            "Break-even Status",
+            "Break-even (GB)",
+            "Break-even (Cycles)",
+            "Lost Revenue ($)"
+          ][i]}
+        </div>
+
+        <div
+className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
+            i === 8
+              ? Number(getNetProfitUSD(selectedShip)) < 0
                 ? "text-red-500"
                 : "text-green-500"
-              : [4, 6, 7, 14].includes(i)
-                ? "text-red-500 font-semibold"
-                : i === 11
-                  ? "text-white"
-                  : "text-gray-500"
-        }`}
-      >
-        {i === 0 && getSubscriptionAndAddonGB(ships[0]) + " GB"}
-        {i === 1 && getSoldGB(ships[0]) + " GB"}
-        {i === 2 && ships[0].usedGB + " GB"}
-        {i === 3 && ships[0].carryOverGB.toFixed(1) + " GB"}
-        {i === 4 && getLostGB(ships[0]) + " GB"}
-        {i === 5 && formatUSD(getRevenueUSD(ships[0]))}
-        {i === 6 && getOperatingCostUSD(ships[0])}
-        {i === 7 && getHardwareCostUSD(ships[0])}
-        {i === 8 && formatUSD(getNetProfitUSD(ships[0]))}
-        {i === 9 && getROI(ships[0])}
-        {i === 10 && getUsageRate(ships[0])}
-        {i === 12 && getBreakEvenGB(ships[0])}
-        {i === 13 && getBreakEvenMonths(ships[0])}
-        {i === 14 && formatUSD(getLostRevenueUSD(ships[0]))}
-      </div>
+              : i === 9
+                ? Number(getROI(selectedShip).replace("%", "")) < 0
+                  ? "text-red-500"
+                  : "text-green-500"
+                : [4, 6, 7, 14].includes(i)
+                  ? "text-red-500 font-semibold"
+                  : i === 11
+                    ? "text-white"
+                    : "text-gray-500"
+          }`}
+        >
+          {i === 0 && getSubscriptionAndAddonGB(selectedShip) + " GB"}
+          {i === 1 && getSoldGB(selectedShip) + " GB"}
+{i === 2 && (
+  <div className="flex items-center justify-between w-full h-full">
 
-      {i === 11 && (() => {
-        const status = getProfitStatus(ships[0]);
-
-        if (status === "loss") {
-          return (
-            <div className="mt-1 flex items-center gap-1 text-xs text-red-500">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              Not profitable
-            </div>
-          );
-        }
-
-        if (status === "breakeven") {
-          return (
-            <div className="mt-1 flex items-center gap-1 text-xs text-orange-500">
-              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-              Break-even
-            </div>
-          );
-        }
-
-        return (
-          <div className="mt-1 flex items-center gap-1 text-xs text-green-500">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-            Profitable
-          </div>
-        );
-      })()}
-    </div>
-  ))}
-
+{/* LEFT */}
+<div className="text-gray-500 w-[75px] whitespace-nowrap">
+  {selectedShip.usedGB} GB
 </div>
-     {/* Divider */}
+
+{/* DIVIDER */}
+<div className="h-8 w-[1px] bg-black/40 mx-3"></div>
+
+{/* RIGHT */}
+<div className="flex flex-col text-[12px] text-gray-500 leading-tight w-[95px]">
+      <div className="flex justify-between w-24">
+        <span>Starlink</span>
+        <span className="text-gray-500">{Number(selectedShip.starlinkGB || 0).toFixed(2)} GB</span>
+      </div>
+      <div className="flex justify-between w-24">
+        <span>Router</span>
+        <span className={getUsageCompareColor(selectedShip.usedGB, selectedShip.starlinkGB)}>
+          {Number(selectedShip.usedGB || 0).toFixed(2)} GB
+        </span>
+      </div>
+<div className="flex justify-between w-24">
+  <span>Voucher</span>
+  <span className={getUsageCompareColor(selectedShip.voucherUsedGB, selectedShip.starlinkGB)}>
+    {Number(selectedShip.voucherUsedGB || 0).toFixed(2)} GB
+  </span>
+</div>
+    </div>
+
+  </div>
+)}
+          {i === 3 && selectedShip.carryOverGB.toFixed(1) + " GB"}
+          {i === 4 && getLostGB(selectedShip) + " GB"}
+          {i === 5 && formatUSD(getRevenueUSD(selectedShip))}
+          {i === 6 && getOperatingCostUSD(selectedShip)}
+          {i === 7 && getHardwareCostUSD(selectedShip)}
+          {i === 8 && formatUSD(getNetProfitUSD(selectedShip))}
+          {i === 9 && getROI(selectedShip)}
+          {i === 10 && getUsageRate(selectedShip)}
+          {i === 12 && getBreakEvenGB(selectedShip)}
+          {i === 13 && getBreakEvenMonths(selectedShip)}
+          {i === 14 && formatUSD(getLostRevenueUSD(selectedShip))}
+        </div>
+
+        {i === 11 && (() => {
+          const status = getProfitStatus(selectedShip);
+
+          if (status === "loss") {
+            return (
+              <div className="mt-1 flex items-center gap-1 text-xs text-red-500">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                Not profitable
+              </div>
+            );
+          }
+
+          if (status === "breakeven") {
+            return (
+              <div className="mt-1 flex items-center gap-1 text-xs text-orange-500">
+                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                Break-even
+              </div>
+            );
+          }
+
+          return (
+            <div className="mt-1 flex items-center gap-1 text-xs text-green-500">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              Profitable
+            </div>
+          );
+        })()}
+      </div>
+    ))}
+  </div>
+) : (
+  <div className="rounded-xl bg-white/[0.8] backdrop-blur-lg px-6 py-6 border border-white/20 text-gray-600">
+    No vessels yet. Click + Vessel to create your first ship.
+  </div>
+)}
+{/* Divider */}
 <div className="my-6 border-t border-white/20"></div>
-
-
-{/* Ship 2 */}
-<div className="text-white/80 text-sm mb-3 tracking-wide">
-  MSC MICHELA | M1 | Global Priority Mini
-</div>
-<div className="grid grid-cols-6 gap-4">
-
-  {Array.from({ length: 12 }).map((_, i) => (
-    <div
-      key={i}
-      className="rounded-xl bg-white/[0.8] backdrop-blur-lg p-3 border border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.25)] flex flex-col"
-    >
-      <div className="text-gray-500 text-sm mb-1">
-        Label
-      </div>
-
-      <div className="text-green-600 font-semibold text-lg">
-        --
-      </div>
-    </div>
-  ))}
-
-</div>
 
 
 {/* Divider */}

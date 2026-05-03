@@ -2,12 +2,17 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 function CrewDashboardContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const voucherCode = searchParams.get("voucher") || "";
+
+  const voucherCode =
+    searchParams.get("voucher") ||
+    searchParams.get("voucherCode") ||
+    searchParams.get("vouchercode") ||
+    searchParams.get("code") ||
+    "";
 
   const [loading, setLoading] = useState(true);
   const [voucher, setVoucher] = useState(null);
@@ -46,33 +51,37 @@ function CrewDashboardContent() {
     };
 
     loadVoucher();
+
+    const interval = setInterval(() => {
+      loadVoucher();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [voucherCode]);
 
-  const formatGB = (value) => `${Number(value || 0).toFixed(2)} GB`;
+  const formatGB = (value) => `${Number(value || 0).toFixed(3)} GB`;
+
+  const totalGb = Number(voucher?.gb_total || 0);
+  const realUsedGb = Number(voucher?.gb_used || 0);
+
+  const displayUsedGb = Math.min(realUsedGb, totalGb);
+  const displayRemainingGb = Math.max(0, totalGb - realUsedGb);
+
+  const isVoucherUsed =
+    voucher && (realUsedGb >= totalGb || voucher.status === "exhausted");
 
   const usagePercent =
-    voucher && Number(voucher.gb_total) > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (Number(voucher.gb_used || 0) / Number(voucher.gb_total || 1)) *
-              100
-          )
-        )
-      : 0;
+    totalGb > 0 ? Math.min(100, Math.round((displayUsedGb / totalGb) * 100)) : 0;
 
   const remainingPercent =
-    voucher && Number(voucher.gb_total) > 0
-      ? (Number(voucher.gb_remaining || 0) / Number(voucher.gb_total || 1)) *
-        100
-      : 0;
+    totalGb > 0 ? Math.max(0, (displayRemainingGb / totalGb) * 100) : 0;
 
   let statusText = "Ready";
   let statusColor = "bg-green-400";
   let barColor = "bg-green-500";
 
-  if (remainingPercent <= 0) {
-    statusText = "Exhausted";
+  if (isVoucherUsed) {
+    statusText = "Voucher used";
     statusColor = "bg-red-400";
     barColor = "bg-red-500";
   } else if (remainingPercent < 5) {
@@ -105,50 +114,52 @@ function CrewDashboardContent() {
 
       <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/20 to-black/35"></div>
 
-      <div className="absolute top-6 left-7 right-7 flex justify-between items-center z-20">
-        <h1 className="text-white text-xl font-medium">CrewOceanLink</h1>
-        <span className="text-white text-xl font-medium">Crew Dashboard</span>
+      <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-7 sm:right-7 flex justify-between items-center z-20">
+        <h1 className="text-white text-base sm:text-xl font-medium">
+          CrewOceanLink
+        </h1>
+        <span className="text-white text-base sm:text-xl font-medium">
+          Crew Dashboard
+        </span>
       </div>
 
-      <div className="relative z-10 flex items-end justify-center min-h-screen pb-4 px-4 pt-20">
+      <div className="relative z-10 flex items-end justify-center h-screen pb-3 px-3 pt-16 sm:pb-4 sm:px-4 sm:pt-20">
         <div
           className="
-            w-full h-[calc(100vh-6rem)] mx-auto rounded-3xl
+            w-full max-w-5xl h-[calc(100vh-4.75rem)] sm:h-[calc(100vh-6rem)]
+            mx-auto rounded-3xl
             bg-white/[0.02] backdrop-saturate-150
             backdrop-blur-[4px]
             border border-white/20
             shadow-[0_8px_32px_rgba(0,0,0,0.25)]
-            p-4 flex flex-col
+            p-3 sm:p-4 flex flex-col
           "
         >
-          <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/20 px-4 py-2.5 flex justify-between items-center shrink-0">
-            <div className="px-4 py-1.5 rounded-full bg-white/30 text-white text-sm">
+          <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/20 px-3 py-2 sm:px-4 sm:py-2.5 flex justify-center items-center shrink-0">
+            <div className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-full bg-white/30 text-white text-xs sm:text-sm">
               Voucher {voucher.voucher_code}
             </div>
-
-            <button
-              onClick={() => router.push("/crew")}
-              className="px-4 py-1.5 rounded-full bg-white/20 text-white text-sm"
-            >
-              Back
-            </button>
           </div>
 
-          <div className="mt-4 px-2 shrink-0">
-            <h2 className="text-3xl font-medium text-white">You're online</h2>
-            <p className="text-white/80 mt-1 text-base">
-              Track your data usage in real time.
+          <div className="mt-3 sm:mt-4 px-2 shrink-0">
+            <h2 className="text-2xl sm:text-3xl font-medium text-white">
+              {isVoucherUsed ? "Voucher used" : "You're online"}
+            </h2>
+            <p className="text-white/80 mt-1 text-sm sm:text-base">
+              {isVoucherUsed
+                ? "Your data allowance has been fully used."
+                : "Track your data usage in real time."}
             </p>
           </div>
 
           <div
             className="
-              mt-4 rounded-2xl bg-white/5 backdrop-blur-[6px]
-              border border-white/15 shadow-inner p-4
-              flex-1 min-h-0 overflow-hidden
+              mt-3 sm:mt-4 rounded-2xl bg-white/5 backdrop-blur-[6px]
+              border border-white/15 shadow-inner p-3 sm:p-4
+              flex-1 min-h-0 overflow-y-auto
             "
           >
-            <div className="flex items-center justify-between text-sm mb-2.5">
+            <div className="flex items-center justify-between text-xs sm:text-sm mb-2.5">
               <div>
                 {voucher.voucher_type} • {voucher.plan_type}
               </div>
@@ -159,24 +170,24 @@ function CrewDashboardContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Data remaining</div>
-                <div className="text-xl font-semibold text-gray-800">
-                  {formatGB(voucher.gb_remaining)}
+                <div className="text-lg sm:text-xl font-semibold text-gray-800">
+                  {formatGB(displayRemainingGb)}
                 </div>
               </div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Data used</div>
-                <div className="text-xl font-semibold text-gray-800">
-                  {formatGB(voucher.gb_used)}
+                <div className="text-lg sm:text-xl font-semibold text-gray-800">
+                  {formatGB(displayUsedGb)}
                 </div>
               </div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm mb-1">Usage</div>
-                <div className="text-lg font-semibold text-gray-800 mb-1.5">
+                <div className="text-base sm:text-lg font-semibold text-gray-800 mb-1.5">
                   {usagePercent}%
                 </div>
 
@@ -188,17 +199,17 @@ function CrewDashboardContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 md:col-span-3">
                 <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
                   <div className="text-gray-600 text-sm">Voucher</div>
-                  <div className="text-base font-semibold text-gray-800">
+                  <div className="text-sm sm:text-base font-semibold text-gray-800">
                     {voucher.voucher_type}
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
                   <div className="text-gray-600 text-sm">Plan</div>
-                  <div className="text-base font-semibold text-gray-800">
+                  <div className="text-sm sm:text-base font-semibold text-gray-800">
                     {voucher.plan_type}
                   </div>
                 </div>
@@ -206,15 +217,15 @@ function CrewDashboardContent() {
             </div>
           </div>
 
-          <div className="pt-2.5 shrink-0">
-            <div className="rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-2.5">
+          <div className="pt-2 shrink-0">
+            <div className="rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-2 sm:py-2.5">
               <div className="text-white text-sm">Private crew access</div>
               <div className="text-white/70 text-xs mt-0.5">
                 One voucher. One device. Live data tracking.
               </div>
             </div>
 
-            <div className="mt-2.5 text-center text-white/75 text-xs space-y-0.5">
+            <div className="mt-2 text-center text-white/75 text-[11px] sm:text-xs space-y-0.5">
               <div>
                 Need help?{" "}
                 <a

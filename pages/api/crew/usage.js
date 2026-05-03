@@ -1,6 +1,16 @@
 import { supabase } from "../../../lib/supabase";
 
 export default async function handler(req, res) {
+  // 🔐 TOKEN CHECK
+  const token = req.headers["x-api-token"];
+
+  if (!process.env.USAGE_API_TOKEN || token !== process.env.USAGE_API_TOKEN) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized",
+    });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,

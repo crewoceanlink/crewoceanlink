@@ -4,7 +4,19 @@ export const config = {
   runtime: "nodejs",
 };
 
+function setCorsHeaders(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 export default async function handler(req, res) {
+  setCorsHeaders(res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   console.log("=== LOGIN REQUEST START ===");
 
   if (req.method !== "POST") {
@@ -22,10 +34,17 @@ export default async function handler(req, res) {
     const deviceId = String(req.body?.deviceId || "").trim();
     const deviceName = String(req.body?.deviceName || "Crew Device").trim();
 
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.headers["x-real-ip"] ||
+      req.socket?.remoteAddress ||
+      null;
+
     console.log("INPUT:", {
       voucherCode,
       deviceId,
       deviceName,
+      ip,
     });
 
     if (!voucherCode) {
@@ -48,7 +67,7 @@ export default async function handler(req, res) {
       p_voucher_code: voucherCode,
       p_device_mac: deviceId,
       p_device_name: deviceName,
-      p_ip_address: null,
+      p_ip_address: ip,
     });
 
     console.log("RPC RESPONSE:", data);
@@ -84,7 +103,6 @@ export default async function handler(req, res) {
       session_id: result.session_id,
       gb_remaining: result.gb_remaining,
     });
-
   } catch (err) {
     console.error("=== LOGIN CRASH ===");
     console.error(err);
