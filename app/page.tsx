@@ -444,15 +444,28 @@ console.log("TOTAL USAGE LOADED:", usageData.length);
 
     let usedBytes = 0;
 
-    for (let i = 1; i < cycleEntries.length; i++) {
-      const prev = Number(cycleEntries[i - 1].bytes_total || 0);
-      const curr = Number(cycleEntries[i].bytes_total || 0);
-      const diff = curr - prev;
+let startIndex = 0;
 
-      if (diff > 0) {
-        usedBytes += diff;
-      }
-    }
+if (firstVoucherStart) {
+  const startTime = new Date(firstVoucherStart);
+
+  startIndex = cycleEntries.findIndex((e) => {
+    return new Date(e.timestamp) >= startTime;
+  });
+
+  if (startIndex === -1) return sum;
+}
+
+for (let i = startIndex + 1; i < cycleEntries.length; i++) {
+  const prev = Number(cycleEntries[i - 1].bytes_total || 0);
+  const curr = Number(cycleEntries[i].bytes_total || 0);
+
+  if (curr >= prev) {
+    usedBytes += curr - prev;
+  } else {
+    usedBytes += curr;
+  }
+}
 
     return Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2));
   };
@@ -1097,6 +1110,7 @@ console.log("SHIPS:", shipsData);
 console.log("VOUCHERS:", vouchersData);
 
     const mapped = shipsData.map((ship) => {
+  console.log("MAPPED LOOP ACTIVE:", ship.name);
       let usedGB = 0;
 
 const relevantSubs = getSelectedCycles(subscriptionsData, ship.id);
@@ -1150,11 +1164,51 @@ const shipStarlinkAll = (starlinkUsageData || [])
   .filter((u) => u.ship_id === ship.id)
   .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-const latestStarlinkEntry = shipStarlinkAll[shipStarlinkAll.length - 1] || null;
+const firstVoucherStart = vouchersData
+  .filter((v) => v.ship_id === ship.id)
+  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]?.created_at;
 
-const starlinkBytes = Number(latestStarlinkEntry?.bytes_total || 0);
+const starlinkEntries = shipStarlinkAll.filter((u) => {
+  if (!firstVoucherStart) return true;
+  return new Date(u.timestamp) >= new Date(firstVoucherStart);
+});
+
+let starlinkBytes = 0;
+
+for (let i = 1; i < starlinkEntries.length; i++) {
+  const prev = Number(starlinkEntries[i - 1].bytes_total || 0);
+  const curr = Number(starlinkEntries[i].bytes_total || 0);
+
+  if (curr >= prev) {
+    starlinkBytes += curr - prev;
+  } else {
+    starlinkBytes += curr;
+  }
+}
 
 const starlinkGB = Number((starlinkBytes / (1024 * 1024 * 1024)).toFixed(2));
+
+console.log("STARLINK CHECK:", {
+  ship: ship.name,
+  firstVoucherStart,
+  allStarlinkRows: shipStarlinkAll.length,
+  filteredStarlinkRows: starlinkEntries.length,
+  firstFiltered: starlinkEntries[0]?.timestamp,
+  lastFiltered: starlinkEntries[starlinkEntries.length - 1]?.timestamp,
+  firstBytes: starlinkEntries[0]?.bytes_total,
+  lastBytes: starlinkEntries[starlinkEntries.length - 1]?.bytes_total,
+  starlinkBytes,
+  starlinkGB,
+});
+
+console.log("STARLINK SUM DEBUG:", {
+  ship: ship.name,
+  rows: shipStarlinkAll.length,
+  first: shipStarlinkAll[0],
+  last: shipStarlinkAll[shipStarlinkAll.length - 1],
+  starlinkBytes,
+  starlinkGB,
+});
 
 console.log("ADMIN USED DEBUG:", {
   ship: ship.name,
@@ -1295,10 +1349,15 @@ const loadSecurityChecks = async () => {
     const res = await fetch("/api/admin/security-check");
     const data = await res.json();
 
-    if (!res.ok || !data.ok) {
-      console.error("SECURITY CHECK LOAD ERROR:", data);
-      return;
-    }
+if (!res.ok) {
+  console.warn("SECURITY API FAILED:", res.status);
+  return;
+}
+
+if (!data || !data.ok) {
+  console.warn("SECURITY DATA INVALID:", data);
+  return;
+}
 
     setSecurityChecks(data.ships || []);
   } catch (err) {
@@ -1732,18 +1791,18 @@ className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
 <div className="h-8 w-[1px] bg-black/40 mx-3"></div>
 
 {/* RIGHT */}
-<div className="flex flex-col text-[12px] text-gray-500 leading-tight w-[95px]">
-      <div className="flex justify-between w-24">
+<div className="flex flex-col text-[12px] text-gray-500 leading-tight w-[130px] shrink-0 -ml-4">
+      <div className="flex justify-between w-30">
         <span>Starlink</span>
         <span className="text-gray-500">{Number(selectedShip.starlinkGB || 0).toFixed(2)} GB</span>
       </div>
-      <div className="flex justify-between w-24">
+      <div className="flex justify-between w-30">
         <span>Router</span>
         <span className={getUsageCompareColor(selectedShip.usedGB, selectedShip.starlinkGB)}>
           {Number(selectedShip.usedGB || 0).toFixed(2)} GB
         </span>
       </div>
-<div className="flex justify-between w-24">
+<div className="flex justify-between w-30">
   <span>Voucher</span>
   <span className={getUsageCompareColor(selectedShip.voucherUsedGB, selectedShip.starlinkGB)}>
     {Number(selectedShip.voucherUsedGB || 0).toFixed(2)} GB
