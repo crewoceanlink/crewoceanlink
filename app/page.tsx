@@ -12,6 +12,8 @@ const [rates, setRates] = useState({
 const [timeNow, setTimeNow] = useState(new Date());
 const [ships, setShips] = useState([]);
 const [securityChecks, setSecurityChecks] = useState([]);
+const [partnerOrders, setPartnerOrders] = useState([]);
+const [partnerOrdersFilter, setPartnerOrdersFilter] = useState("pending");
 const [selectedShipIndex, setSelectedShipIndex] = useState(() => {
   if (typeof window === "undefined") return 0;
 
@@ -1344,6 +1346,77 @@ lastSeenStarlink
     console.log("VOUCHERS:", data);
 };
 
+const loadPartnerOrders = async () => {
+  const { data, error } = await supabase
+    .from("partner_orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("PARTNER ORDERS LOAD ERROR:", error);
+    return;
+  }
+
+  setPartnerOrders(data || []);
+};
+
+const markPartnerOrderPaid = async (orderId) => {
+  const confirmPaid = confirm(
+    "Confirm payment received?\n\nThis will mark the partner order as paid."
+  );
+
+  if (!confirmPaid) return;
+
+  const res = await fetch("/api/admin/partner-orders/mark-paid", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      order_id: orderId,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || !data.success) {
+    alert(data.message || "Failed to mark order as paid");
+    return;
+  }
+
+  alert("Order marked as paid");
+  await loadPartnerOrders();
+};
+
+const generatePartnerOrderVouchers = async (orderId) => {
+  const confirmGenerate = confirm(
+    "Generate vouchers for this paid order?\n\nThis will create the ordered vouchers and mark the order as fulfilled."
+  );
+
+  if (!confirmGenerate) return;
+
+  const res = await fetch("/api/admin/partner-orders/generate-vouchers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      order_id: orderId,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || !data.success) {
+    alert(data.message || "Failed to generate vouchers");
+    return;
+  }
+
+  alert(`Generated ${data.count} vouchers:\n\n${data.vouchers.join("\n")}`);
+  await loadPartnerOrders();
+  window.location.reload();
+};
+
 const loadSecurityChecks = async () => {
   try {
     const res = await fetch("/api/admin/security-check");
@@ -1369,12 +1442,14 @@ useEffect(() => {
   loadShips();
   loadVouchers();
   loadSecurityChecks();
+  loadPartnerOrders();
 }, [timeFilter]);
 
 useEffect(() => {
   const interval = setInterval(() => {
     loadShips();
     loadSecurityChecks();
+    loadPartnerOrders();
   }, 30000);
 
   return () => clearInterval(interval);
@@ -1390,6 +1465,22 @@ const getTime = (timeZone) => {
 };
 
 const selectedShip = ships[selectedShipIndex] || ships[0];
+
+const visiblePartnerOrders = partnerOrders.filter((order) => {
+  if (!selectedShip) return false;
+
+  const sameShip =
+    String(order.ship_name || "").toLowerCase() ===
+    String(selectedShip.name || "").toLowerCase();
+
+  if (!sameShip) return false;
+
+  if (partnerOrdersFilter === "pending") {
+    return order.payment_status === "pending";
+  }
+
+  return true;
+});
 
 const selectedSecurity = selectedShip
   ? securityChecks.find((s) => String(s.ship_id) === String(selectedShip.id))
@@ -1865,7 +1956,125 @@ className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
 
 {/* Divider */}
 <div className="my-6 border-t border-white/20"></div>
-     <div className="mt-6">
+
+{/* Partner Orders */}
+<div className="mt-6">
+  <div className="
+    rounded-xl
+    bg-white/[0.8]
+    backdrop-blur-lg
+    border border-white/20
+    p-4
+  ">
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <div className="text-gray-700 text-sm font-semibold">
+          Partner Orders {selectedShip ? `(${selectedShip.name})` : ""}
+        </div>
+        <div className="text-gray-500 text-xs mt-1">
+          New partner orders for the selected ship.
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => setPartnerOrdersFilter("pending")}
+          className={`px-3 py-1 rounded-full text-xs ${
+            partnerOrdersFilter === "pending"
+              ? "bg-gray-900 text-white"
+              : "bg-white/70 text-gray-600"
+          }`}
+        >
+          Pending only
+        </button>
+
+        <button
+          onClick={() => setPartnerOrdersFilter("all")}
+          className={`px-3 py-1 rounded-full text-xs ${
+            partnerOrdersFilter === "all"
+              ? "bg-gray-900 text-white"
+              : "bg-white/70 text-gray-600"
+          }`}
+        >
+          All orders
+        </button>
+      </div>
+    </div>
+
+    {visiblePartnerOrders.length === 0 ? (
+      <div className="text-gray-500 text-sm">
+        No partner orders for this ship.
+      </div>
+    ) : (
+      <div className="space-y-2">
+        {visiblePartnerOrders.map((order) => {
+          const items = Array.isArray(order.order_data)
+            ? order.order_data
+                .map((item) => `${item.quantity}x ${item.size}GB`)
+                .join(", ")
+            : "—";
+
+          return (
+            <div
+              key={order.id}
+              className="grid grid-cols-12 gap-3 items-center rounded-xl bg-white/70 border border-white/30 px-4 py-3 text-sm"
+            >
+              <div className="col-span-2 text-gray-700 font-medium">
+                {order.partner_name}
+              </div>
+
+              <div className="col-span-4 text-gray-600">
+                {items}
+              </div>
+
+              <div className="col-span-2 text-gray-700 font-semibold">
+                ${Number(order.total_amount || 0).toFixed(0)}
+              </div>
+
+              <div className="col-span-2">
+                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">
+                  {order.payment_status === "pending"
+                    ? "Payment pending"
+                    : order.payment_status}
+                </span>
+              </div>
+
+              <div className="col-span-2 text-right">
+{order.payment_status === "pending" ? (
+  <button
+    onClick={() => markPartnerOrderPaid(order.id)}
+    className="px-4 py-2 rounded-lg bg-gray-900 text-white text-xs hover:bg-gray-800 transition"
+  >
+    Mark as paid
+  </button>
+) : order.delivery_status === "delivered" ? (
+  <button
+    disabled
+    className="px-4 py-2 rounded-lg bg-green-100 text-green-700 text-xs cursor-default"
+  >
+    Fulfilled
+  </button>
+) : (
+  <button
+    onClick={() => generatePartnerOrderVouchers(order.id)}
+    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 transition"
+  >
+    Generate vouchers
+  </button>
+)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
+
+{/* Divider */}
+<div className="my-6 border-t border-white/20"></div>
+
+<div className="mt-6">
 
   <div className="
     rounded-xl 

@@ -1,6 +1,7 @@
+// @ts-nocheck
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const voucherTypes = [
   { size: "1GB", price: 3, stock: 10 },
@@ -11,9 +12,30 @@ const voucherTypes = [
 ];
 
 const activeVouchers = [
-  { code: "HXB940J6", size: "20GB", used: 18.2, total: 20, status: "Near limit" },
-  { code: "JXEH4L1H", size: "5GB", used: 2.3, total: 5, status: "Active" },
-  { code: "KLM882QZ", size: "10GB", used: 8.6, total: 10, status: "Near limit" },
+  {
+    code: "HXB940J6",
+    size: "20GB",
+    used: 18.2,
+    total: 20,
+    status: "Near limit",
+    assignedTo: "Juan Engine",
+  },
+  {
+    code: "JXEH4L1H",
+    size: "5GB",
+    used: 2.3,
+    total: 5,
+    status: "Active",
+    assignedTo: "Ahmed Deck",
+  },
+  {
+    code: "KLM882QZ",
+    size: "10GB",
+    used: 8.6,
+    total: 10,
+    status: "Near limit",
+    assignedTo: "",
+  },
 ];
 
 export default function PartnerDashboardPage() {
@@ -24,6 +46,77 @@ export default function PartnerDashboardPage() {
     "20GB": 0,
     "50GB": 0,
   });
+
+  const [assignedNames, setAssignedNames] = useState<Record<string, string>>(
+    Object.fromEntries(activeVouchers.map((v) => [v.code, v.assignedTo]))
+  );
+
+const [realVouchers, setRealVouchers] = useState([]);
+
+// 🔹 AVAILABLE = noch nicht verkauft (kein assigned_to)
+const availableVouchers = realVouchers.filter(
+  (v) => !v.assigned_to || v.assigned_to === ""
+);
+
+// 🔹 ACTIVE = bereits verkauft / zugewiesen
+const activeSoldVouchers = realVouchers.filter(
+  (v) => v.assigned_to && v.assigned_to !== ""
+);
+
+// 🔹 STOCK COUNT (für Anzeige oben)
+const stockCount = {
+  "1GB": availableVouchers.filter(v => v.voucher_type === "1GB").length,
+  "5GB": availableVouchers.filter(v => v.voucher_type === "5GB").length,
+  "10GB": availableVouchers.filter(v => v.voucher_type === "10GB").length,
+  "20GB": availableVouchers.filter(v => v.voucher_type === "20GB").length,
+  "50GB": availableVouchers.filter(v => v.voucher_type === "50GB").length,
+};
+
+const today = new Date().toISOString().slice(0, 10);
+
+const todaySoldVouchers = realVouchers.filter((v) => {
+  if (!v.assigned_to) return false;
+  if (!v.assigned_at) return false;
+
+  return v.assigned_at.startsWith(today);
+});
+
+const todaySoldCount = todaySoldVouchers.length;
+
+const todayRevenue = todaySoldVouchers.reduce(
+  (sum, v) => sum + (v.crew_price_usd || 0),
+  0
+);
+
+const todayProfit = todaySoldVouchers.reduce(
+  (sum, v) =>
+    sum + ((v.crew_price_usd || 0) - (v.your_revenue_usd || 0)),
+  0
+);
+
+const cycleStart = new Date("2026-04-18");
+const cycleEnd = new Date("2026-05-17");
+
+const cycleSoldVouchers = realVouchers.filter((v) => {
+  if (!v.assigned_to) return false;
+  if (!v.assigned_at) return false;
+
+  const assignedDate = new Date(v.assigned_at);
+  return assignedDate >= cycleStart && assignedDate <= cycleEnd;
+});
+
+const cycleSoldCount = cycleSoldVouchers.length;
+
+const cycleRevenue = cycleSoldVouchers.reduce(
+  (sum, v) => sum + (v.crew_price_usd || 0),
+  0
+);
+
+const cycleProfit = cycleSoldVouchers.reduce(
+  (sum, v) =>
+    sum + ((v.crew_price_usd || 0) - (v.your_revenue_usd || 0)),
+  0
+);
 
   const total = useMemo(() => {
     return voucherTypes.reduce(
@@ -38,6 +131,86 @@ export default function PartnerDashboardPage() {
       [size]: Math.max(0, (prev[size] || 0) + change),
     }));
   };
+
+  const updateAssignedName = (code: string, value: string) => {
+    setAssignedNames((prev) => ({
+      ...prev,
+      [code]: value,
+    }));
+  };
+
+  const saveAssignedName = async (voucher, value: string) => {
+    const assignedTo = value.trim();
+
+    if (!assignedTo) return;
+
+    try {
+      const res = await fetch("/api/partner/vouchers/assign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          voucher_id: voucher.id,
+          assigned_to: assignedTo,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Assign failed");
+        return;
+      }
+
+      setAssignedNames((prev) => ({
+        ...prev,
+        [voucher.voucher_code]: assignedTo,
+      }));
+
+      setRealVouchers((prev) =>
+        prev.map((v) =>
+          v.id === voucher.id
+            ? {
+                ...v,
+                assigned_to: assignedTo,
+              }
+            : v
+        )
+      );
+    } catch (err) {
+      console.error("ASSIGN VOUCHER ERROR:", err);
+      alert("Assign failed");
+    }
+  };
+
+useEffect(() => {
+  const loadVouchers = async () => {
+    try {
+      const res = await fetch("/api/partner/vouchers");
+      const data = await res.json();
+
+if (data.success) {
+  console.log("PARTNER VOUCHERS FROM API:", data.vouchers);
+
+  setRealVouchers(data.vouchers);
+
+  setAssignedNames(
+    Object.fromEntries(
+      data.vouchers.map((v) => [
+        v.voucher_code,
+        v.assigned_to || "",
+      ])
+    )
+  );
+}
+    } catch (err) {
+      console.error("LOAD PARTNER VOUCHERS ERROR:", err);
+    }
+  };
+
+  loadVouchers();
+}, []);
 
   return (
     <div className="min-h-screen w-full relative text-white overflow-hidden">
@@ -98,32 +271,32 @@ export default function PartnerDashboardPage() {
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Voucher stock</div>
                 <div className="mt-2 grid grid-cols-2 gap-1 text-sm font-semibold text-gray-800">
-                  {voucherTypes.map((item) => (
-                    <div key={item.size}>
-                      {item.size}: {item.stock}
-                    </div>
-                  ))}
+{voucherTypes.map((item) => (
+  <div key={item.size}>
+    {item.size}: {stockCount[item.size] || 0}
+  </div>
+))}
                 </div>
               </div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Today</div>
-                <div className="text-xl font-semibold text-gray-800 mt-1">
-                  4 sold
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Revenue $80 | Profit $20
-                </div>
+<div className="text-xl font-semibold text-gray-800 mt-1">
+  {todaySoldCount} sold
+</div>
+<div className="text-sm text-gray-600 mt-1">
+  Revenue ${todayRevenue} | Profit ${todayProfit}
+</div>
               </div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Current cycle</div>
-                <div className="text-xl font-semibold text-gray-800 mt-1">
-                  47 sold
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Revenue $940 | Profit $235
-                </div>
+<div className="text-xl font-semibold text-gray-800 mt-1">
+  {cycleSoldCount} sold
+</div>
+<div className="text-sm text-gray-600 mt-1">
+  Revenue ${cycleRevenue} | Profit ${cycleProfit}
+</div>
               </div>
 
               <div className="md:col-span-3 rounded-xl bg-amber-100/90 px-4 py-3 border border-amber-200 shadow">
@@ -137,33 +310,115 @@ export default function PartnerDashboardPage() {
               </div>
             </div>
 
+<div className="mt-5">
+  <h3 className="text-white text-base sm:text-lg font-medium mb-3">
+    Available vouchers (ready to sell)
+  </h3>
+
+  {availableVouchers.length === 0 ? (
+    <div className="rounded-xl bg-white/[0.85] px-4 py-4 border border-white/20 shadow">
+      <div className="text-gray-800 font-semibold text-sm">
+        No available vouchers
+      </div>
+      <div className="text-gray-600 text-sm mt-1">
+        All vouchers are currently assigned. New vouchers will appear here after an order is fulfilled.
+      </div>
+    </div>
+  ) : (
+    <div className="space-y-2">
+      {availableVouchers.map((voucher) => (
+        <div
+          key={voucher.id}
+          className="rounded-xl bg-green-50 px-4 py-3 border border-green-200 shadow"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="text-green-800 font-semibold text-sm">
+                {voucher.voucher_type} voucher
+              </div>
+              <div className="text-green-700 text-xs font-mono">
+                {voucher.voucher_code}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <input
+                type="text"
+                defaultValue=""
+                placeholder="Customer name"
+                onBlur={(e) => saveAssignedName(voucher, e.target.value)}
+                className="
+                  w-full sm:w-[180px] rounded-lg border border-green-200
+                  bg-white px-3 py-1.5 text-xs text-gray-800
+                  placeholder:text-gray-400 outline-none
+                  focus:border-green-500
+                "
+              />
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(voucher.voucher_code);
+                  alert("Voucher code copied");
+                }}
+                className="px-3 py-1.5 text-xs bg-green-700 text-white rounded-lg"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
             <div className="mt-5">
               <h3 className="text-white text-base sm:text-lg font-medium mb-3">
                 Active vouchers
               </h3>
 
               <div className="space-y-2">
-                {activeVouchers.map((voucher) => {
-                  const percent = Math.round((voucher.used / voucher.total) * 100);
+                {activeSoldVouchers.map((voucher) => {
+const percent = Math.round(
+  ((voucher.gb_used || 0) / (voucher.gb_total || 1)) * 100
+);
                   const isNearLimit = percent >= 80;
 
                   return (
                     <div
-                      key={voucher.code}
+                      key={voucher.voucher_code}
                       className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-gray-800 font-semibold">
-                            {voucher.code}
-                          </div>
-                          <div className="text-gray-600 text-sm">
-                            {voucher.size} voucher
-                          </div>
+                      <div className="flex items-center justify-between gap-3">
+<div>
+  <div className="text-gray-800 font-semibold text-sm">
+    {voucher.voucher_code}
+  </div>
+  <div className="text-gray-600 text-xs">
+    {voucher.voucher_type} voucher
+  </div>
+</div>
+
+                        <div className="flex-1 max-w-[220px]">
+                          <input
+                            type="text"
+                            value={assignedNames[voucher.voucher_code] || ""}
+onChange={(e) =>
+  updateAssignedName(voucher.voucher_code, e.target.value)
+}
+onBlur={(e) => saveAssignedName(voucher, e.target.value)}
+                            placeholder="Assign name"
+                            className="
+                              w-full rounded-lg border border-gray-200
+                              bg-white/75 px-3 py-1.5 text-xs text-gray-800
+                              placeholder:text-gray-400 outline-none
+                              focus:border-gray-400
+                            "
+                          />
                         </div>
 
                         <div
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${
                             isNearLimit
                               ? "bg-amber-100 text-amber-800"
                               : "bg-green-100 text-green-700"
@@ -176,7 +431,7 @@ export default function PartnerDashboardPage() {
                       <div className="mt-3">
                         <div className="mb-1 flex justify-between text-sm text-gray-600">
                           <span>
-                            {voucher.used} / {voucher.total} GB
+                            {voucher.gb_used} / {voucher.gb_total} GB
                           </span>
                           <span>{percent}%</span>
                         </div>
@@ -251,7 +506,58 @@ export default function PartnerDashboardPage() {
                 </div>
               </div>
 
-              <button className="mt-4 w-full rounded-xl bg-gray-900 text-white py-3 font-medium">
+              <button
+                onClick={async () => {
+                  try {
+                    const items = voucherTypes
+                      .map((v) => ({
+                        size: v.size.replace("GB", ""),
+                        quantity: quantities[v.size],
+                        price: v.price,
+                      }))
+                      .filter((v) => v.quantity > 0);
+
+                    if (items.length === 0) {
+                      alert("Please select at least one voucher");
+                      return;
+                    }
+
+                    const res = await fetch("/api/partner/order", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        ship_name: "MSC MICHELA",
+                        ship_model: "M1",
+                        starlink_plan: "Global Priority 50",
+                        partner_name: "Mike",
+                        items,
+                        total_amount: total,
+                      }),
+                    });
+
+                    const data = await res.json();
+
+                    if (data.success) {
+                      alert("Order submitted successfully");
+                      setQuantities({
+                        "1GB": 0,
+                        "5GB": 0,
+                        "10GB": 0,
+                        "20GB": 0,
+                        "50GB": 0,
+                      });
+                    } else {
+                      alert(data.message || "Order failed");
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert("Order failed");
+                  }
+                }}
+                className="mt-4 w-full rounded-xl bg-gray-900 text-white py-3 font-medium"
+              >
                 Submit order
               </button>
             </div>
