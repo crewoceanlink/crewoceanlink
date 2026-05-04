@@ -1862,9 +1862,6 @@ className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
     No vessels yet. Click + Vessel to create your first ship.
   </div>
 )}
-{/* Divider */}
-<div className="my-6 border-t border-white/20"></div>
-
 
 {/* Divider */}
 <div className="my-6 border-t border-white/20"></div>
