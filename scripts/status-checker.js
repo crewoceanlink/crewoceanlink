@@ -21,7 +21,7 @@ if (!supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const shipId = "SHIP-001";
-const offlineThresholdMinutes = Number(process.env.OFFLINE_THRESHOLD_MINUTES || 10);
+const offlineThresholdMinutes = Number(process.env.OFFLINE_THRESHOLD_MINUTES || 2);
 const offlineRepeatMinutes = Number(process.env.OFFLINE_REPEAT_MINUTES || 60);
 
 async function sendTelegramMessage(text) {
@@ -147,18 +147,36 @@ async function run() {
 
   const last = await getLastStatus();
 
-  const routerOnline = await checkMikrotikStatus();
-  const starlinkOnline = await checkStarlinkStatus();
+  const routerReachable = await checkMikrotikStatus();
+  const starlinkReachable = await checkStarlinkStatus();
 
   const now = new Date().toISOString();
 
-  const lastSeenRouter = routerOnline
+  const lastSeenRouter = routerReachable
     ? now
     : last?.last_seen_router || null;
 
-  const lastSeenStarlink = starlinkOnline
+  const lastSeenStarlink = starlinkReachable
     ? now
     : last?.last_seen_starlink || null;
+
+  const routerOfflineMinutes = lastSeenRouter
+    ? diffMinutes(lastSeenRouter)
+    : null;
+
+  const starlinkOfflineMinutes = lastSeenStarlink
+    ? diffMinutes(lastSeenStarlink)
+    : null;
+
+  const routerOnline =
+    routerReachable ||
+    (routerOfflineMinutes !== null &&
+      routerOfflineMinutes < offlineThresholdMinutes);
+
+  const starlinkOnline =
+    starlinkReachable ||
+    (starlinkOfflineMinutes !== null &&
+      starlinkOfflineMinutes < offlineThresholdMinutes);
 
   const current = {
     routerOnline,
