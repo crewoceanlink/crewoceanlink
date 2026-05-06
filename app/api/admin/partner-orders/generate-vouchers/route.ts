@@ -19,7 +19,7 @@ const gbTotals: Record<string, number> = {
 };
 
 const getCrewPriceUSD = (planType: string, size: string) => {
-  const prices = {
+  const prices: Record<string, Record<string, number>> = {
     small: {
       "1": 7,
       "5": 34,
