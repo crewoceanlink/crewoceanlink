@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/router-status-cron",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
