@@ -89,20 +89,34 @@ async function processStatusTransitions(current, last) {
 
   if (!last) return messages;
 
-  if (last.router_online !== current.routerOnline) {
-    messages.push(
-      current.routerOnline
-        ? "✅ Router wieder ONLINE"
-        : "❌ Router OFFLINE"
-    );
+  const routerWasOnline =
+    last.router_online === true &&
+    last.last_seen_router !== current.lastSeenRouter;
+
+  const routerWasOffline =
+    last.router_online === false;
+
+  if (current.routerOnline && routerWasOffline) {
+    messages.push("✅ Router wieder ONLINE");
   }
 
-  if (last.starlink_online !== current.starlinkOnline) {
-    messages.push(
-      current.starlinkOnline
-        ? "✅ Starlink wieder ONLINE"
-        : "❌ Starlink OFFLINE"
-    );
+  if (!current.routerOnline && routerWasOnline) {
+    messages.push("❌ Router OFFLINE");
+  }
+
+  const starlinkWasOnline =
+    last.starlink_online === true &&
+    last.last_seen_starlink !== current.lastSeenStarlink;
+
+  const starlinkWasOffline =
+    last.starlink_online === false;
+
+  if (current.starlinkOnline && starlinkWasOffline) {
+    messages.push("✅ Starlink wieder ONLINE");
+  }
+
+  if (!current.starlinkOnline && starlinkWasOnline) {
+    messages.push("❌ Starlink OFFLINE");
   }
 
   if (!current.routerOnline && current.lastSeenRouter) {
