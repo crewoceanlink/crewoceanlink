@@ -1559,9 +1559,9 @@ const loadPartnerOrders = async () => {
 
   if (orderIds.length > 0) {
     const { data: voucherData, error: voucherError } = await supabase
-      .from("crew_vouchers")
-      .select("partner_order_id, voucher_code")
-      .in("partner_order_id", orderIds);
+.from("crew_vouchers")
+.select("partner_order_id, voucher_code, voucher_type, gb_total, gb_used, status")
+.in("partner_order_id", orderIds);
 
     if (voucherError) {
       console.error("PARTNER ORDER VOUCHERS LOAD ERROR:", voucherError);
@@ -1574,7 +1574,7 @@ const loadPartnerOrders = async () => {
         acc[orderId] = [];
       }
 
-      acc[orderId].push(voucher.voucher_code);
+      acc[orderId].push(voucher);
 
       return acc;
     }, {});
@@ -2336,58 +2336,108 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
           return (
             <div
               key={order.id}
-              className="grid grid-cols-12 gap-3 items-center rounded-xl bg-white/70 border border-white/30 px-4 py-3 text-sm"
+              className="rounded-xl bg-white/70 border border-white/30 px-4 py-3 text-sm"
             >
-              <div className="col-span-2 text-gray-700 font-medium">
-                {order.partner_name}
+              <div className="grid grid-cols-12 gap-3 items-center">
+                <div className="col-span-2 text-gray-700 font-medium">
+                  {order.partner_name}
+                </div>
+
+                <div className="col-span-3 text-gray-600">
+                  {items}
+                </div>
+
+                <div className="col-span-2 text-gray-700 font-medium">
+                  {order.voucher_codes && order.voucher_codes.length > 0
+                    ? order.voucher_codes.map((voucher, index) => (
+                        <a
+                          key={`${voucher.voucher_code || "voucher"}-${index}`}
+                          href={`/crew/dashboard?voucherCode=${encodeURIComponent(
+                            voucher.voucher_code
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                        >
+                          {voucher.voucher_code}
+                          {index < order.voucher_codes.length - 1 ? ", " : ""}
+                        </a>
+                      ))
+                    : "—"}
+                </div>
+
+                <div className="col-span-1 text-gray-700 font-semibold">
+                  ${Number(order.total_amount || 0).toFixed(2)}
+                </div>
+
+                <div className="col-span-2">
+                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-sm">
+                    {order.payment_status === "pending"
+                      ? "Payment pending"
+                      : order.payment_status}
+                  </span>
+                </div>
+
+                <div className="col-span-2 text-right">
+                  {order.payment_status === "pending" ? (
+                    <button
+                      onClick={() => markPartnerOrderPaid(order.id)}
+                      className="px-4 py-2 rounded-lg bg-gray-900 text-white text-xs hover:bg-gray-800 transition"
+                    >
+                      Mark as paid
+                    </button>
+                  ) : order.delivery_status === "delivered" ? (
+                    <button
+                      disabled
+                      className="px-4 py-2 rounded-lg bg-green-100 text-green-700 text-sm cursor-default"
+                    >
+                      Fulfilled
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => generatePartnerOrderVouchers(order.id)}
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 transition"
+                    >
+                      Generate vouchers
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="col-span-3 text-gray-600">
-                {items}
-              </div>
+              {order.voucher_codes && order.voucher_codes.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {order.voucher_codes.map((voucher, index) => {
+                    const totalGb = Number(voucher.gb_total || 0);
+                    const usedGb = Number(voucher.gb_used || 0);
+                    const displayUsedGb = Math.min(usedGb, totalGb);
+                    const usagePercent =
+                      totalGb > 0
+                        ? Math.min(
+                            100,
+                            Math.round((displayUsedGb / totalGb) * 100)
+                          )
+                        : 0;
 
-              <div className="col-span-2 text-gray-700 font-mono text-xs">
-                {order.voucher_codes && order.voucher_codes.length > 0
-                  ? order.voucher_codes.join(", ")
-                  : "—"}
-              </div>
+return (
+  <div key={`usage-${voucher.voucher_code || "voucher"}-${index}`}>
+    <div className="flex items-center justify-between text-gray-600 text-sm mb-1">
+      <span>
+        {displayUsedGb.toFixed(2)} / {totalGb} GB
+      </span>
+      <span>{usagePercent}%</span>
+    </div>
 
-              <div className="col-span-1 text-gray-700 font-semibold">
-                ${Number(order.total_amount || 0).toFixed(2)}
-              </div>
-
-              <div className="col-span-2">
-                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">
-                  {order.payment_status === "pending"
-                    ? "Payment pending"
-                    : order.payment_status}
-                </span>
-              </div>
-
-              <div className="col-span-2 text-right">
-{order.payment_status === "pending" ? (
-  <button
-    onClick={() => markPartnerOrderPaid(order.id)}
-    className="px-4 py-2 rounded-lg bg-gray-900 text-white text-xs hover:bg-gray-800 transition"
-  >
-    Mark as paid
-  </button>
-) : order.delivery_status === "delivered" ? (
-  <button
-    disabled
-    className="px-4 py-2 rounded-lg bg-green-100 text-green-700 text-xs cursor-default"
-  >
-    Fulfilled
-  </button>
-) : (
-  <button
-    onClick={() => generatePartnerOrderVouchers(order.id)}
-    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 transition"
-  >
-    Generate vouchers
-  </button>
-)}
-              </div>
+    <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-green-500"
+        style={{ width: `${usagePercent}%` }}
+      />
+    </div>
+  </div>
+);
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
