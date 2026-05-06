@@ -32,8 +32,7 @@ const [loading, setLoading] = useState(false);
     setLoading(false);
 
 if (res.ok) {
-  const code = voucherCode.trim().toUpperCase();
-  router.push(`/crew/dashboard?voucherCode=${encodeURIComponent(code)}`);
+  router.push("/");
   router.refresh();
   return;
 }
