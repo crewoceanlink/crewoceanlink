@@ -20,7 +20,7 @@ if (!supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const shipId = Number(process.env.STATUS_SHIP_ID || 1);
+const shipId = "SHIP-001";
 const offlineThresholdMinutes = Number(process.env.OFFLINE_THRESHOLD_MINUTES || 10);
 const offlineRepeatMinutes = Number(process.env.OFFLINE_REPEAT_MINUTES || 60);
 
@@ -70,16 +70,16 @@ async function saveStatus({
   lastSeenRouter,
   lastSeenStarlink,
 }) {
-  const { error } = await supabase.from("router_status").insert([
-    {
-      ship_id: shipId,
+  const { error } = await supabase
+    .from("router_status")
+    .update({
       router_online: routerOnline,
       starlink_online: starlinkOnline,
       last_seen_router: lastSeenRouter,
       last_seen_starlink: lastSeenStarlink,
       checked_at: new Date().toISOString(),
-    },
-  ]);
+    })
+    .eq("ship_id", shipId);
 
   if (error) throw error;
 }

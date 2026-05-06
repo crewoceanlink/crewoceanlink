@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -31,18 +32,61 @@ async function sendTelegramAlert(message: string) {
   }
 }
 
+export async function GET() {
+  try {
+    const cookieStore = await cookies();
+    const partnerId = cookieStore.get("partner_id")?.value;
+
+    if (!partnerId) {
+      return NextResponse.json(
+        { success: false, message: "Partner not logged in" },
+        { status: 401 }
+      );
+    }
+
+    const { data: lastOrder, error: orderError } = await supabase
+      .from("partner_orders")
+      .select("*")
+      .eq("partner_id", partnerId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (orderError || !lastOrder) {
+      return NextResponse.json({
+        success: true,
+        last_order: null,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      last_order: lastOrder,
+    });
+  } catch (err) {
+    console.error("PARTNER LAST ORDER ERROR:", err);
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const partnerId = cookieStore.get("partner_id")?.value;
+
+    if (!partnerId) {
+      return NextResponse.json(
+        { success: false, message: "Partner not logged in" },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
 
-    const {
-      ship_name,
-      ship_model,
-      starlink_plan,
-      partner_name,
-      items,
-      total_amount,
-    } = body;
+    const { items, total_amount } = body;
 
     if (!items || items.length === 0) {
       return NextResponse.json(
@@ -51,13 +95,49 @@ export async function POST(req: Request) {
       );
     }
 
+    const { data: partner, error: partnerError } = await supabase
+      .from("partners")
+      .select("*")
+      .eq("id", partnerId)
+      .eq("active", true)
+      .single();
+
+    if (partnerError || !partner) {
+      return NextResponse.json(
+        { success: false, message: "Partner not found" },
+        { status: 404 }
+      );
+    }
+
+    const { data: ship, error: shipError } = await supabase
+      .from("ships")
+      .select("*")
+      .eq("id", partner.ship_id)
+      .single();
+
+    if (shipError || !ship) {
+      return NextResponse.json(
+        { success: false, message: "Ship not found" },
+        { status: 404 }
+      );
+    }
+
+    const planName =
+      Number(ship.plan_gb || 0) >= 500
+        ? "Global Priority 500"
+        : "Global Priority 50";
+
     const { data: order, error: orderError } = await supabase
       .from("partner_orders")
       .insert({
-        ship_name,
-        ship_model,
-        starlink_plan,
-        partner_name,
+        ship_name: ship.name,
+        ship_model: ship.model,
+        starlink_plan: planName,
+        partner_name: partner.name,
+
+        ship_id: ship.id,
+        partner_id: partner.id,
+
         order_data: items,
         total_amount,
       })
@@ -99,10 +179,10 @@ export async function POST(req: Request) {
     await sendTelegramAlert(
       `🚨 New Crew Partner Order
 
-Ship: ${ship_name}
-Model: ${ship_model}
-Plan: ${starlink_plan}
-Partner: ${partner_name}
+Ship: ${ship.name}
+Model: ${ship.model}
+Plan: ${planName}
+Partner: ${partner.name}
 
 Order:
 ${orderLines}

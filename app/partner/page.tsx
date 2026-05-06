@@ -4,11 +4,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 const voucherTypes = [
-  { size: "1GB", price: 3, stock: 10 },
-  { size: "5GB", price: 10, stock: 8 },
-  { size: "10GB", price: 18, stock: 5 },
-  { size: "20GB", price: 32, stock: 12 },
-  { size: "50GB", price: 70, stock: 3 },
+  { size: "1GB" },
+  { size: "5GB" },
+  { size: "10GB" },
+  { size: "20GB" },
+  { size: "50GB" },
 ];
 
 const activeVouchers = [
@@ -52,6 +52,14 @@ export default function PartnerDashboardPage() {
   );
 
 const [realVouchers, setRealVouchers] = useState([]);
+const [lastOrder, setLastOrder] = useState(null);
+const [priceRules, setPriceRules] = useState([]);
+const [partner, setPartner] = useState(null);
+const [ship, setShip] = useState(null);
+const [currentCycle, setCurrentCycle] = useState({
+  start: null,
+  end: null,
+});
 
 // 🔹 AVAILABLE = noch nicht verkauft (kein assigned_to)
 const availableVouchers = realVouchers.filter(
@@ -70,6 +78,10 @@ const stockCount = {
   "10GB": availableVouchers.filter(v => v.voucher_type === "10GB").length,
   "20GB": availableVouchers.filter(v => v.voucher_type === "20GB").length,
   "50GB": availableVouchers.filter(v => v.voucher_type === "50GB").length,
+};
+
+const getPriceRule = (size: string) => {
+  return priceRules.find((rule) => rule.voucher_type === size);
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -94,14 +106,16 @@ const todayProfit = todaySoldVouchers.reduce(
   0
 );
 
-const cycleStart = new Date("2026-04-18");
-const cycleEnd = new Date("2026-05-17");
-
 const cycleSoldVouchers = realVouchers.filter((v) => {
   if (!v.assigned_to) return false;
   if (!v.assigned_at) return false;
+  if (!currentCycle.start) return false;
+  if (!currentCycle.end) return false;
 
   const assignedDate = new Date(v.assigned_at);
+  const cycleStart = new Date(currentCycle.start);
+  const cycleEnd = new Date(currentCycle.end);
+
   return assignedDate >= cycleStart && assignedDate <= cycleEnd;
 });
 
@@ -118,12 +132,14 @@ const cycleProfit = cycleSoldVouchers.reduce(
   0
 );
 
-  const total = useMemo(() => {
-    return voucherTypes.reduce(
-      (sum, item) => sum + item.price * (quantities[item.size] || 0),
-      0
-    );
-  }, [quantities]);
+const total = useMemo(() => {
+  return voucherTypes.reduce((sum, item) => {
+    const rule = getPriceRule(item.size);
+    const price = Number(rule?.partner_price_usd || 0);
+
+    return sum + price * (quantities[item.size] || 0);
+  }, 0);
+}, [quantities, priceRules]);
 
   const updateQuantity = (size: string, change: number) => {
     setQuantities((prev) => ({
@@ -193,9 +209,17 @@ useEffect(() => {
 if (data.success) {
   console.log("PARTNER VOUCHERS FROM API:", data.vouchers);
 
-  setRealVouchers(data.vouchers);
+setRealVouchers(data.vouchers || []);
+setPriceRules(data.price_rules || []);
+setPartner(data.partner || null);
+setShip(data.ship || null);
 
-  setAssignedNames(
+setCurrentCycle({
+  start: data.cycle_start || null,
+  end: data.cycle_end || null,
+});
+
+setAssignedNames(
     Object.fromEntries(
       data.vouchers.map((v) => [
         v.voucher_code,
@@ -209,7 +233,21 @@ if (data.success) {
     }
   };
 
+  const loadLastOrder = async () => {
+    try {
+      const res = await fetch("/api/partner/order");
+      const data = await res.json();
+
+      if (data.success) {
+        setLastOrder(data.last_order);
+      }
+    } catch (err) {
+      console.error("LOAD LAST ORDER ERROR:", err);
+    }
+  };
+
   loadVouchers();
+  loadLastOrder();
 }, []);
 
   return (
@@ -226,9 +264,26 @@ if (data.success) {
         <h1 className="text-white text-base sm:text-xl font-medium">
           CrewOceanLink
         </h1>
-        <span className="text-white text-base sm:text-xl font-medium">
-          Crew Partner Dashboard
-        </span>
+
+        <div className="flex items-center gap-3">
+          <span className="text-white text-base sm:text-xl font-medium">
+            Crew Partner Dashboard
+          </span>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await fetch("/api/partner/logout", {
+                method: "POST",
+              });
+
+              window.location.href = "/login";
+            }}
+            className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs sm:text-sm text-white hover:bg-white/15"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       <div className="relative z-10 flex items-end justify-center min-h-screen pb-3 px-3 pt-16 sm:pb-4 sm:px-4 sm:pt-20">
@@ -245,9 +300,31 @@ if (data.success) {
         >
           <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/20 px-3 py-2 sm:px-4 sm:py-2.5 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs sm:text-sm">
-              <div>MSC MICHELA | M1 | Global Priority 50</div>
-              <div className="text-white/75">Partner: Mike</div>
-              <div className="text-white/75">Cycle: 18 Apr – 17 May</div>
+<div>
+  {ship
+    ? `${ship.name} | ${ship.model} | ${
+        Number(ship.plan_gb) >= 500
+          ? "Global Priority 500GB"
+          : "Global Priority 50GB"
+      }`
+    : "Loading ship..."}
+</div>
+
+<div className="text-white/75">
+  Partner: {partner ? partner.name : "Loading partner..."}
+</div>
+<div className="text-white/75">
+  Cycle:{" "}
+  {currentCycle.start && currentCycle.end
+    ? `${new Date(currentCycle.start).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+      })} – ${new Date(currentCycle.end).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+      })}`
+    : "—"}
+</div>
             </div>
           </div>
 
@@ -285,7 +362,7 @@ if (data.success) {
   {todaySoldCount} sold
 </div>
 <div className="text-sm text-gray-600 mt-1">
-  Revenue ${todayRevenue} | Profit ${todayProfit}
+  Revenue ${Number(todayRevenue || 0).toFixed(2)} | Profit ${Number(todayProfit || 0).toFixed(2)}
 </div>
               </div>
 
@@ -295,7 +372,7 @@ if (data.success) {
   {cycleSoldCount} sold
 </div>
 <div className="text-sm text-gray-600 mt-1">
-  Revenue ${cycleRevenue} | Profit ${cycleProfit}
+  Revenue ${Number(cycleRevenue || 0).toFixed(2)} | Profit ${Number(cycleProfit || 0).toFixed(2)}
 </div>
               </div>
 
@@ -392,10 +469,10 @@ const percent = Math.round(
                       <div className="flex items-center justify-between gap-3">
 <div>
   <div className="text-gray-800 font-semibold text-sm">
-    {voucher.voucher_code}
-  </div>
-  <div className="text-gray-600 text-xs">
     {voucher.voucher_type} voucher
+  </div>
+  <div className="text-gray-600 text-xs font-mono">
+    {voucher.voucher_code}
   </div>
 </div>
 
@@ -461,14 +538,21 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                     key={item.size}
                     className="flex items-center justify-between rounded-xl bg-white/70 border border-gray-200 px-3 py-2"
                   >
-                    <div>
-                      <div className="text-gray-800 font-semibold">
-                        {item.size}
-                      </div>
-                      <div className="text-gray-600 text-sm">
-                        ${item.price} each
-                      </div>
-                    </div>
+<div className="flex flex-col">
+  <div className="text-gray-800 font-semibold">
+    {item.size}
+  </div>
+
+  <div className="text-gray-600 text-xs">
+    Partner price: $
+    {getPriceRule(item.size)?.partner_price_usd?.toFixed(2) || "-"}
+  </div>
+
+  <div className="text-[11px] text-gray-500 mt-1">
+    Crew sales price: $
+    {getPriceRule(item.size)?.crew_price_usd?.toFixed(2) || "-"} · Mandatory
+  </div>
+</div>
 
                     <div className="flex items-center gap-3">
                       <button
@@ -509,13 +593,17 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
               <button
                 onClick={async () => {
                   try {
-                    const items = voucherTypes
-                      .map((v) => ({
-                        size: v.size.replace("GB", ""),
-                        quantity: quantities[v.size],
-                        price: v.price,
-                      }))
-                      .filter((v) => v.quantity > 0);
+const items = voucherTypes
+  .map((v) => {
+    const rule = getPriceRule(v.size);
+
+    return {
+      size: v.size.replace("GB", ""),
+      quantity: quantities[v.size],
+      price: Number(rule?.partner_price_usd || 0),
+    };
+  })
+  .filter((v) => v.quantity > 0);
 
                     if (items.length === 0) {
                       alert("Please select at least one voucher");
@@ -527,14 +615,10 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                       headers: {
                         "Content-Type": "application/json",
                       },
-                      body: JSON.stringify({
-                        ship_name: "MSC MICHELA",
-                        ship_model: "M1",
-                        starlink_plan: "Global Priority 50",
-                        partner_name: "Mike",
-                        items,
-                        total_amount: total,
-                      }),
+body: JSON.stringify({
+  items,
+  total_amount: total,
+}),
                     });
 
                     const data = await res.json();
@@ -563,14 +647,30 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
-                <div className="text-gray-800 font-semibold">Last order</div>
-                <div className="text-gray-600 text-sm mt-2">
-                  <div>2x 5GB</div>
-                  <div>2x 10GB</div>
-                  <div className="mt-1">Status: Payment pending</div>
-                </div>
-              </div>
+<div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
+  <div className="text-gray-800 font-semibold">Last order</div>
+
+  <div className="text-gray-600 text-sm mt-2">
+    {lastOrder && Array.isArray(lastOrder.order_data) ? (
+      <>
+        {lastOrder.order_data.map((item, idx) => (
+          <div key={idx}>
+            {item.quantity}x {item.size}GB
+          </div>
+        ))}
+
+        <div className="mt-1">
+          Status:{" "}
+          {lastOrder.payment_status === "paid"
+            ? "Paid"
+            : "Payment pending"}
+        </div>
+      </>
+    ) : (
+      <div>No orders yet</div>
+    )}
+  </div>
+</div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
                 <div className="text-gray-800 font-semibold">Payment info</div>

@@ -106,18 +106,52 @@ const handleAddVessel = async () => {
     return;
   }
 
-  const model = String(prompt("Revenue model? Allowed: M1, M2, M3") || "")
-    .trim()
-    .toUpperCase();
+const model = String(prompt("Revenue model? Allowed: M1, M2, M3") || "")
+  .trim()
+  .toUpperCase();
 
-  if (!["M1", "M2", "M3"].includes(model)) {
-    alert("Invalid model. Allowed: M1, M2, M3");
-    return;
-  }
+if (!["M1", "M2", "M3"].includes(model)) {
+  alert("Invalid model. Allowed: M1, M2, M3");
+  return;
+}
 
-  const planGB = planType === "small" ? 50 : 500;
-  const planPriceEUR = planType === "small" ? 241 : 625;
-  const hardwareEUR = 908.71;
+const partnerName =
+  model === "M3"
+    ? "Mike"
+    : String(prompt("Partner name?") || "").trim();
+
+if (!partnerName) {
+  alert("Partner name is required");
+  return;
+}
+
+const partnerEmail = String(
+  prompt("Partner email? Optional. Leave empty if not available.") || ""
+).trim();
+
+const planGB = planType === "small" ? 50 : 500;
+const planPriceEUR = planType === "small" ? 241 : 625;
+const hardwareEUR = 908.71;
+
+const cycleStartInput = prompt(
+  "Enter billing cycle START date (YYYY-MM-DD)\nExample: 2026-04-18"
+);
+
+if (!cycleStartInput) {
+  alert("Cycle start date is required");
+  return;
+}
+
+const cycleStart = new Date(cycleStartInput);
+
+if (isNaN(cycleStart.getTime())) {
+  alert("Invalid date format. Use YYYY-MM-DD");
+  return;
+}
+
+const cycleEnd = new Date(cycleStart);
+cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+cycleEnd.setDate(cycleEnd.getDate() - 1);
 
   const confirmCreate = confirm(
     `Create vessel?\n\n` +
@@ -152,13 +186,8 @@ const handleAddVessel = async () => {
     return;
   }
 
-  const today = new Date();
-  const startDate = today.toISOString().split("T")[0];
-
-  const end = new Date(today);
-  end.setMonth(end.getMonth() + 1);
-  end.setDate(end.getDate() - 1);
-  const endDate = end.toISOString().split("T")[0];
+const startDate = cycleStart.toISOString().split("T")[0];
+const endDate = cycleEnd.toISOString().split("T")[0];
 
   const { error: subscriptionError } = await supabase
     .from("subscriptions")
@@ -181,8 +210,80 @@ const handleAddVessel = async () => {
     return;
   }
 
-  alert(`${shipName} created successfully`);
+  const { error: partnerError } = await supabase
+    .from("partners")
+    .insert([
+      {
+        name: partnerName,
+        email: partnerEmail || null,
+        ship_id: shipData.id,
+        commission_model: model,
+        plan_type: planType,
+        role: model === "M3" ? "admin" : "partner",
+        active: true,
+      },
+    ]);
+
+  if (partnerError) {
+    console.error("PARTNER INSERT ERROR:", partnerError);
+    alert(
+      "Vessel and subscription created, but partner creation failed:\n\n" +
+        JSON.stringify(partnerError, null, 2)
+    );
+    return;
+  }
+
+  alert(`${shipName} created successfully with partner ${partnerName}`);
   window.localStorage.setItem("selectedShipIndex", String(selectedShipIndex));
+  window.location.reload();
+};
+
+const handleEditCurrentCycle = async () => {
+  if (!selectedShip) {
+    alert("No ship selected");
+    return;
+  }
+
+  const newStartDate = String(
+    prompt(
+      "Enter new billing cycle START date (YYYY-MM-DD)\nExample: 2026-04-18"
+    ) || ""
+  ).trim();
+
+  if (!newStartDate) {
+    alert("Cycle update cancelled");
+    return;
+  }
+
+  const start = new Date(newStartDate);
+
+  if (isNaN(start.getTime())) {
+    alert("Invalid date format. Use YYYY-MM-DD");
+    return;
+  }
+
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  end.setDate(end.getDate() - 1);
+
+  const newEndDate = end.toISOString().split("T")[0];
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({
+      start_date: newStartDate,
+      end_date: newEndDate,
+    })
+    .eq("ship_id", selectedShip.id);
+
+  if (error) {
+    console.error("CYCLE UPDATE ERROR:", error);
+    alert("Cycle update failed");
+    return;
+  }
+
+  alert(`Cycle updated:\n\nStart: ${newStartDate}\nEnd: ${newEndDate}`);
+
   window.location.reload();
 };
 
@@ -536,26 +637,26 @@ for (let i = startIndex + 1; i < cycleEntries.length; i++) {
     return;
   }
 
-  const revenueShare =
-    revenueModel === "M1" ? 0.75 :
-    revenueModel === "M2" ? 0.80 :
-    1.00;
+const revenueShare =
+  revenueModel === "M1" ? 0.50 :
+  revenueModel === "M2" ? 0.70 :
+  1.00;
 
-  const crewPrices = {
-    small: {
-      "1GB": 6.5,
-      "5GB": 31,
-      "10GB": 60,
-      "20GB": 116,
-      "50GB": 285,
-    },
-    large: {
-      "1GB": 4.9,
-      "5GB": 23,
-      "10GB": 42,
-      "20GB": 80,
-      "50GB": 190,
-    },
+const crewPrices = {
+  small: {
+    "1GB": 7,
+    "5GB": 34,
+    "10GB": 67,
+    "20GB": 132,
+    "50GB": 330,
+  },
+large: {
+  "1GB": 5,
+  "5GB": 24,
+  "10GB": 45,
+  "20GB": 85,
+  "50GB": 200,
+},
   };
 
   const crewPriceUSD = crewPrices[planType][gbType];
@@ -739,6 +840,10 @@ const getLostRevenueUSD = (ship) => {
   if (!soldGB || soldGB <= 0) return 0;
   if (revenue === "--" || revenue <= 0) return 0;
 
+
+  if (soldGB < 10) return "Insufficient data";
+
+
   const avgRevenuePerGB = revenue / soldGB;
 
   return lostGB * avgRevenuePerGB;
@@ -760,55 +865,91 @@ const soldGB = getSoldGB(ship);
   return usage.toFixed(0) + "%";
 };
 const getCrewPricesUSD = (ship) => {
-  if (ship.planType === "small") {
-    return {
-      "1GB": 6.5,
-      "5GB": 31,
-      "10GB": 60,
-      "20GB": 116,
-      "50GB": 285,
-    };
-  }
-
+if (ship.planType === "small") {
   return {
-    "1GB": 4.9,
-    "5GB": 23,
-    "10GB": 42,
-    "20GB": 80,
-    "50GB": 190,
+    "1GB": 7,
+    "5GB": 34,
+    "10GB": 67,
+    "20GB": 132,
+    "50GB": 330,
   };
+}
+
+return {
+  "1GB": 5,
+  "5GB": 24,
+  "10GB": 45,
+  "20GB": 85,
+  "50GB": 200,
+};
 };
 
 const getYourPricesUSD = (ship) => {
   const crewPrices = getCrewPricesUSD(ship);
 
-  if (ship.model === "M1") {
-    return {
-      "1GB": crewPrices["1GB"] * 0.75,
-      "5GB": crewPrices["5GB"] * 0.75,
-      "10GB": crewPrices["10GB"] * 0.75,
-      "20GB": crewPrices["20GB"] * 0.75,
-      "50GB": crewPrices["50GB"] * 0.75,
-    };
-  }
+if (ship.model === "M1") {
+  return {
+    "1GB": crewPrices["1GB"] * 0.50,
+    "5GB": crewPrices["5GB"] * 0.50,
+    "10GB": crewPrices["10GB"] * 0.50,
+    "20GB": crewPrices["20GB"] * 0.50,
+    "50GB": crewPrices["50GB"] * 0.50,
+  };
+}
 
-  if (ship.model === "M2") {
-    return {
-      "1GB": crewPrices["1GB"] * 0.80,
-      "5GB": crewPrices["5GB"] * 0.80,
-      "10GB": crewPrices["10GB"] * 0.80,
-      "20GB": crewPrices["20GB"] * 0.80,
-      "50GB": crewPrices["50GB"] * 0.80,
-    };
-  }
+if (ship.model === "M2") {
+  return {
+    "1GB": crewPrices["1GB"] * 0.70,
+    "5GB": crewPrices["5GB"] * 0.70,
+    "10GB": crewPrices["10GB"] * 0.70,
+    "20GB": crewPrices["20GB"] * 0.70,
+    "50GB": crewPrices["50GB"] * 0.70,
+  };
+}
 
   return crewPrices;
+};
+
+const getFifoOperatingCostUSD = (ship, soldGB) => {
+  if (!rates.eur || !ship) return 0;
+
+  let remainingGB = soldGB;
+  let costUSD = 0;
+
+  const subscriptionGB = Number(ship.plan.gb || 0);
+  const subscriptionCostUSD = Number(ship.plan.priceEUR || 0) / rates.eur;
+  const subscriptionCostPerGB =
+    subscriptionGB > 0 ? subscriptionCostUSD / subscriptionGB : 0;
+
+  const subscriptionUsedGB = Math.min(remainingGB, subscriptionGB);
+
+  costUSD += subscriptionUsedGB * subscriptionCostPerGB;
+  remainingGB -= subscriptionUsedGB;
+
+  const sortedAddons = [...(ship.addons || [])].sort((a, b) => {
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  for (const addon of sortedAddons) {
+    if (remainingGB <= 0) break;
+
+    const addonGB = Number(addon.gb || 0);
+    const addonCostUSD = Number(addon.price_eur || 0) / rates.eur;
+    const addonCostPerGB = addonGB > 0 ? addonCostUSD / addonGB : 0;
+
+    const addonUsedGB = Math.min(remainingGB, addonGB);
+
+    costUSD += addonUsedGB * addonCostPerGB;
+    remainingGB -= addonUsedGB;
+  }
+
+  return costUSD;
 };
 
 const getRevenueUSD = (ship) => {
   if (!ship.vouchers) return "--";
 
-  const prices = getYourPricesUSD(ship);
+  const prices = getCrewPricesUSD(ship);
 
   const revenue =
     (ship.vouchers["1GB"] || 0) * prices["1GB"] +
@@ -823,15 +964,48 @@ const getNetProfitUSD = (ship) => {
   if (!rates.eur || !ship.vouchers) return "--";
 
   const revenue = getRevenueUSD(ship);
-  const totalCost = getTotalCostUSD(ship);
-  const hardwareDepreciation = getHardwareDepreciationUSD(ship);
+  const soldGB = getSoldGB(ship);
+  const operatingCost = getFifoOperatingCostUSD(ship, soldGB);
 
-  return revenue - totalCost - hardwareDepreciation;
+  const hardwareDepreciation =
+    ship.model === "M1" ? 0 : getHardwareDepreciationUSD(ship);
+
+  const availableGB = getSubscriptionAndAddonGB(ship);
+
+  const proportionalHardwareCost =
+    availableGB > 0 ? hardwareDepreciation * (soldGB / availableGB) : 0;
+
+  const totalProfit =
+    revenue - operatingCost - proportionalHardwareCost;
+
+  if (ship.model === "M1") {
+    return totalProfit * 0.5;
+  }
+
+  if (ship.model === "M2") {
+    return totalProfit * 0.7;
+  }
+
+  return totalProfit;
 };
-const getROI = (ship) => {
-  if (!rates.eur) return "--";
 
-  const profit = getNetProfitUSD(ship);
+const getCashStatusUSD = (ship) => {
+  if (!rates.eur || !ship.vouchers) return "--";
+
+  const unitProfit = getNetProfitUSD(ship);
+  const operatingCost = getTotalCostUSD(ship);
+
+  const hardwareDepreciation =
+    ship.model === "M1" ? 0 : getHardwareDepreciationUSD(ship);
+
+  return unitProfit - operatingCost - hardwareDepreciation;
+};
+
+const getROI = (ship) => {
+  if (ship.model === "M1") return "Not relevant";
+  if (!rates.eur) return "Not relevant";
+
+  const profit = getCashStatusUSD(ship);
   const hardware = ship.hardwareEUR / rates.eur;
 
   if (hardware === 0) return "--";
@@ -844,7 +1018,8 @@ const getBreakEvenGB = (ship) => {
   if (!rates.eur) return "--";
 
   const operatingCost = getTotalCostUSD(ship);
-  const hardwareDepreciation = getHardwareDepreciationUSD(ship);
+  const hardwareDepreciation =
+  ship.model === "M1" ? 0 : getHardwareDepreciationUSD(ship);
   const totalCost = operatingCost + hardwareDepreciation;
 
   const soldGB = getSoldGB(ship);
@@ -872,7 +1047,7 @@ const getBreakEvenMonths = (ship) => {
 
   if (isNaN(breakEvenGB)) return "--";
 
-  const cycles = breakEvenGB / soldGB;
+  const cycles = breakEvenGB / getSubscriptionAndAddonGB(ship);
 
   if (cycles > 60) return ">60 cycles";
 
@@ -882,12 +1057,17 @@ const getBreakEvenMonths = (ship) => {
 const getProfitStatus = (ship) => {
   if (!rates.eur || !ship.vouchers) return "--";
 
-  const profit = getNetProfitUSD(ship);
+  const soldGB = getSoldGB(ship);
+  const breakEvenValue = getBreakEvenGB(ship);
 
-  if (profit === "--") return "--";
+  if (breakEvenValue === "--") return "--";
 
-  if (profit < 0) return "loss";
-  if (profit === 0) return "breakeven";
+  const breakEvenGB = parseFloat(breakEvenValue);
+
+  if (isNaN(breakEvenGB)) return "--";
+
+  if (soldGB < breakEvenGB) return "below";
+  if (soldGB === breakEvenGB) return "breakeven";
   return "profit";
 };
 const formatUSD = (value) => {
@@ -897,8 +1077,8 @@ const formatUSD = (value) => {
 
   if (isNaN(num)) return value;
 
-  if (num < 0) return `-$${Math.abs(num).toFixed(0)}`;
-  return `$${num.toFixed(0)}`;
+  if (num < 0) return `-$${Math.abs(num).toFixed(2)}`;
+  return `$${num.toFixed(2)}`;
 };
 
 const STATUS_TIMEOUT_MINUTES = 2;
@@ -1117,6 +1297,22 @@ console.log("VOUCHERS:", vouchersData);
 
 const relevantSubs = getSelectedCycles(subscriptionsData, ship.id);
 
+let currentCycleLabel = "";
+
+if (relevantSubs.length === 1) {
+  const sub = relevantSubs[0];
+
+  const format = (d) => {
+    const date = new Date(d);
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+    });
+  };
+
+  currentCycleLabel = `${format(sub.start)} – ${format(sub.end)}`;
+}
+
 const shipUsageAll = usageData
   .filter((u) => u.ship_id === ship.id)
   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -1278,11 +1474,12 @@ const starlinkOnline =
 
   const mappedPlanType = Number(ship.plan_gb) >= 500 ? "large" : "small";
 
-  return {
+return {
     id: ship.id,
     name: ship.name,
     model: ship.model,
     planType: mappedPlanType,
+    currentCycleLabel,
 
 plan: {
   name: mappedPlanType === "large" ? "Global Priority 500GB" : "Global Priority 50",
@@ -1357,7 +1554,40 @@ const loadPartnerOrders = async () => {
     return;
   }
 
-  setPartnerOrders(data || []);
+  const orders = data || [];
+  const orderIds = orders.map((order) => order.id);
+
+  let vouchersByOrder = {};
+
+  if (orderIds.length > 0) {
+    const { data: voucherData, error: voucherError } = await supabase
+      .from("crew_vouchers")
+      .select("partner_order_id, voucher_code")
+      .in("partner_order_id", orderIds);
+
+    if (voucherError) {
+      console.error("PARTNER ORDER VOUCHERS LOAD ERROR:", voucherError);
+    }
+
+    vouchersByOrder = (voucherData || []).reduce((acc, voucher) => {
+      const orderId = voucher.partner_order_id;
+
+      if (!acc[orderId]) {
+        acc[orderId] = [];
+      }
+
+      acc[orderId].push(voucher.voucher_code);
+
+      return acc;
+    }, {});
+  }
+
+  const ordersWithVouchers = orders.map((order) => ({
+    ...order,
+    voucher_codes: vouchersByOrder[order.id] || [],
+  }));
+
+  setPartnerOrders(ordersWithVouchers);
 };
 
 const markPartnerOrderPaid = async (orderId) => {
@@ -1738,6 +1968,19 @@ shadow-inner
       </select>
     )}
 
+{timeFilter.mode === "current" && selectedShip?.currentCycleLabel && (
+  <span className="text-white/70 text-xs whitespace-nowrap flex items-center gap-2">
+    {selectedShip.currentCycleLabel}
+
+    <span
+      onClick={handleEditCurrentCycle}
+      className="text-white/50 hover:text-white/80 cursor-pointer"
+    >
+      (Edit)
+    </span>
+  </span>
+)}
+
     {timeFilter.mode === "range" && (
       <>
         <input
@@ -1839,12 +2082,12 @@ className="rounded-xl bg-white/[0.8] backdrop-blur-lg px-4 py-3 border border-wh
             "Used Data (GB)",
             "Carry Over (GB)",
             "Lost GB",
-            "Our Revenue ($)",
+            "Crew Sales ($)",
             "Operating Cost ($)",
             "Hardware Investment ($)",
-            "Net Profit ($)",
+            "Profit Overview ($)",
             "ROI (%)",
-            "Usage Rate (%)",
+            "Break-even Progress (%)",
             "Break-even Status",
             "Break-even (GB)",
             "Break-even (Cycles)",
@@ -1853,7 +2096,7 @@ className="rounded-xl bg-white/[0.8] backdrop-blur-lg px-4 py-3 border border-wh
         </div>
 
         <div
-className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
+className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
             i === 8
               ? Number(getNetProfitUSD(selectedShip)) < 0
                 ? "text-red-500"
@@ -1908,23 +2151,101 @@ className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
           {i === 4 && getLostGB(selectedShip) + " GB"}
           {i === 5 && formatUSD(getRevenueUSD(selectedShip))}
           {i === 6 && getOperatingCostUSD(selectedShip)}
-          {i === 7 && getHardwareCostUSD(selectedShip)}
-          {i === 8 && formatUSD(getNetProfitUSD(selectedShip))}
-          {i === 9 && getROI(selectedShip)}
-          {i === 10 && getUsageRate(selectedShip)}
+{i === 7 && (
+  selectedShip.model === "M1"
+    ? <span className="text-gray-400">Not relevant</span>
+    : getHardwareCostUSD(selectedShip)
+)}
+{i === 8 && (
+  <div className="flex flex-col justify-start h-full">
+
+    {/* Titel */}
+
+
+    {/* Werte auf KPI-Level */}
+    <div className="flex items-center justify-between">
+
+      {/* LEFT */}
+      <div className="flex flex-col items-start">
+<div
+  className={`text-lg font-semibold leading-none ${
+    Number(getNetProfitUSD(selectedShip)) < 0
+      ? "text-red-500"
+      : "text-green-600"
+  }`}
+>
+  {formatUSD(getNetProfitUSD(selectedShip))}
+</div>
+        <div className="text-[10px] text-gray-500 leading-none mt-1">
+          Unit Profit
+        </div>
+      </div>
+
+      {/* DIVIDER */}
+      <div className="h-6 w-[1px] bg-black/40 mx-2"></div>
+
+      {/* RIGHT */}
+      <div className="flex flex-col items-end">
+<div
+  className={`text-lg font-semibold leading-none ${
+    Number(getCashStatusUSD(selectedShip)) < 0
+      ? "text-red-500"
+      : "text-green-600"
+  }`}
+>
+  {formatUSD(getCashStatusUSD(selectedShip))}
+</div>
+        <div className="text-[10px] text-gray-500 leading-none mt-1">
+          Cash Status
+        </div>
+      </div>
+
+    </div>
+  </div>
+)}
+          {i === 9 && (
+  getROI(selectedShip) === "Not relevant"
+    ? <span className="text-gray-400">Not relevant</span>
+    : getROI(selectedShip)
+)}
+{i === 10 && (() => {
+  const soldGB = getSoldGB(selectedShip);
+  const breakEvenValue = getBreakEvenGB(selectedShip);
+
+  if (breakEvenValue === "--") return "Not relevant";
+
+  const breakEvenGB = parseFloat(breakEvenValue);
+
+  if (!breakEvenGB || isNaN(breakEvenGB)) return "Not relevant";
+
+  const progress = (soldGB / breakEvenGB) * 100;
+
+  const color =
+    progress >= 100
+      ? "text-green-500"
+      : progress >= 50
+        ? "text-yellow-500"
+        : "text-red-500";
+
+  return <span className={color}>{progress.toFixed(0)}%</span>;
+})()}
           {i === 12 && getBreakEvenGB(selectedShip)}
           {i === 13 && getBreakEvenMonths(selectedShip)}
-          {i === 14 && formatUSD(getLostRevenueUSD(selectedShip))}
+          {i === 14 && (
+  getLostRevenueUSD(selectedShip) === "Insufficient data"
+    ? <span className="text-gray-400">Insufficient data</span>
+    : formatUSD(getLostRevenueUSD(selectedShip))
+)}
         </div>
 
         {i === 11 && (() => {
           const status = getProfitStatus(selectedShip);
 
-          if (status === "loss") {
+          if (status === "below") {
             return (
               <div className="mt-1 flex items-center gap-1 text-xs text-red-500">
                 <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                Not profitable
+                Below break-even
               </div>
             );
           }
@@ -2023,12 +2344,18 @@ className={`font-semibold text-lg ${i === 2 ? "mt-1" : "mt-3"} ${
                 {order.partner_name}
               </div>
 
-              <div className="col-span-4 text-gray-600">
+              <div className="col-span-3 text-gray-600">
                 {items}
               </div>
 
-              <div className="col-span-2 text-gray-700 font-semibold">
-                ${Number(order.total_amount || 0).toFixed(0)}
+              <div className="col-span-2 text-gray-700 font-mono text-xs">
+                {order.voucher_codes && order.voucher_codes.length > 0
+                  ? order.voucher_codes.join(", ")
+                  : "—"}
+              </div>
+
+              <div className="col-span-1 text-gray-700 font-semibold">
+                ${Number(order.total_amount || 0).toFixed(2)}
               </div>
 
               <div className="col-span-2">

@@ -18,6 +18,27 @@ const gbTotals: Record<string, number> = {
   "50": 50,
 };
 
+const getCrewPriceUSD = (planType: string, size: string) => {
+  const prices = {
+    small: {
+      "1": 7,
+      "5": 34,
+      "10": 67,
+      "20": 132,
+      "50": 330,
+    },
+    large: {
+      "1": 5,
+      "5": 24,
+      "10": 45,
+      "20": 85,
+      "50": 200,
+    },
+  };
+
+  return prices[planType]?.[size] || 0;
+};
+
 export async function POST(req: Request) {
   try {
     const { order_id } = await req.json();
@@ -102,9 +123,9 @@ export async function POST(req: Request) {
           plan_type: planType,
           gb_total: gbTotal,
           gb_used: 0,
-          crew_price_usd: Number(item.unit_price || 0),
-          revenue_share_model: ship.model,
-          your_revenue_usd: Number(item.unit_price || 0),
+crew_price_usd: getCrewPriceUSD(planType, size),
+revenue_share_model: ship.model,
+your_revenue_usd: Number(item.unit_price || 0),
           status: "active",
           created_by: "partner_order",
           notes: `Generated from partner order ${order_id}`,

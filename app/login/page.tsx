@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+const [loginType, setLoginType] = useState("admin");
+const [password, setPassword] = useState("");
+const [partnerEmail, setPartnerEmail] = useState("");
+const [voucherCode, setVoucherCode] = useState("");
+const [error, setError] = useState("");
+const [loading, setLoading] = useState(false);
 
   const login = async () => {
     if (!password.trim()) {
@@ -35,6 +38,62 @@ export default function AdminLoginPage() {
     }
 
     setError("Wrong password");
+  };
+
+  const partnerLogin = async () => {
+    if (!partnerEmail.trim()) {
+      setError("Please enter your email");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    const res = await fetch("/api/partner/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: partnerEmail }),
+    });
+
+    setLoading(false);
+
+    if (res.ok) {
+      router.push("/partner");
+      router.refresh();
+      return;
+    }
+
+    setError("Partner not found");
+  };
+
+  const voucherLogin = async () => {
+    if (!voucherCode.trim()) {
+      setError("Please enter your voucher code");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    const res = await fetch("/api/voucher/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ voucher_code: voucherCode }),
+    });
+
+    setLoading(false);
+
+    if (res.ok) {
+      router.push("/voucher");
+      router.refresh();
+      return;
+    }
+
+    setError("Voucher not found");
   };
 
   return (
@@ -112,24 +171,106 @@ export default function AdminLoginPage() {
               <p className="text-white/75 mt-8 text-sm">
                 Login to your CrewOceanLink account.
               </p>
+
+<div className="mt-7 grid grid-cols-3 gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      setLoginType("admin");
+      setError("");
+    }}
+    className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+      loginType === "admin"
+        ? "bg-white text-black"
+        : "bg-white/10 text-white border border-white/20"
+    }`}
+  >
+    Admin
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setLoginType("partner");
+      setError("");
+    }}
+    className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+      loginType === "partner"
+        ? "bg-white text-black"
+        : "bg-white/10 text-white border border-white/20"
+    }`}
+  >
+    Crew Partner
+  </button>
+
+    <button
+    type="button"
+    onClick={() => {
+      setLoginType("voucher");
+      setError("");
+    }}
+    className={`rounded-xl px-3 py-3 text-sm font-medium transition ${
+      loginType === "voucher"
+        ? "bg-white text-black"
+        : "bg-white/10 text-white border border-white/20"
+    }`}
+  >
+    Crew Member
+  </button>
+</div>
+
             </div>
 
             <div className="mt-7">
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") login();
-                }}
-                className="
-                  w-full rounded-xl border border-white/25
-                  bg-black/25 px-5 py-4
-                  text-white placeholder:text-white/45
-                  outline-none focus:border-white/60
-                "
-              />
+{loginType === "admin" ? (
+  <input
+    type="password"
+    placeholder="Password"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") login();
+    }}
+    className="
+      w-full rounded-xl border border-white/25
+      bg-black/25 px-5 py-4
+      text-white placeholder:text-white/45
+      outline-none focus:border-white/60
+    "
+  />
+) : loginType === "partner" ? (
+  <input
+    type="email"
+    placeholder="Partner email"
+    value={partnerEmail}
+    onChange={(e) => setPartnerEmail(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") partnerLogin();
+    }}
+    className="
+      w-full rounded-xl border border-white/25
+      bg-black/25 px-5 py-4
+      text-white placeholder:text-white/45
+      outline-none focus:border-white/60
+    "
+  />
+) : (
+  <input
+    type="text"
+    placeholder="Voucher code"
+    value={voucherCode}
+    onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") voucherLogin();
+    }}
+    className="
+      w-full rounded-xl border border-white/25
+      bg-black/25 px-5 py-4
+      text-white placeholder:text-white/45
+      outline-none focus:border-white/60
+    "
+  />
+)}
 
               {error && (
                 <div className="mt-3 text-sm text-red-400 text-center">
@@ -137,18 +278,26 @@ export default function AdminLoginPage() {
                 </div>
               )}
 
-              <button
-                onClick={login}
-                disabled={loading}
-                className="
-                  mt-7 w-full rounded-xl bg-white text-black
-                  py-4 font-medium
-                  hover:bg-white/90 transition
-                  disabled:opacity-60
-                "
-              >
-                {loading ? "Logging in..." : "Login"}
-              </button>
+<button
+  onClick={() => {
+    if (loginType === "admin") {
+      login();
+    } else if (loginType === "partner") {
+      partnerLogin();
+    } else {
+      voucherLogin();
+    }
+  }}
+  disabled={loading}
+  className="
+    mt-7 w-full rounded-xl bg-white text-black
+    py-4 font-medium
+    hover:bg-white/90 transition
+    disabled:opacity-60
+  "
+>
+  {loading ? "Logging in..." : "Login"}
+</button>
 
               <div className="mt-8 flex items-center justify-center gap-2 text-white/60 text-sm">
                 <span>◇</span>
