@@ -2,10 +2,11 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 function CrewDashboardContent() {
   const searchParams = useSearchParams();
+    const router = useRouter();
 
   const voucherCode =
     searchParams.get("voucher") ||
@@ -58,6 +59,15 @@ function CrewDashboardContent() {
 
     return () => clearInterval(interval);
   }, [voucherCode]);
+
+  const logout = async () => {
+    await fetch("/api/voucher/logout", {
+      method: "POST",
+    });
+
+    router.push("/login");
+    router.refresh();
+  };
 
   const formatGB = (value) => `${Number(value || 0).toFixed(3)} GB`;
 
@@ -118,9 +128,20 @@ function CrewDashboardContent() {
         <h1 className="text-white text-base sm:text-xl font-medium">
           CrewOceanLink
         </h1>
-        <span className="text-white text-base sm:text-xl font-medium">
-          Crew Dashboard
-        </span>
+
+        <div className="flex items-center gap-3">
+          <span className="text-white text-base sm:text-xl font-medium">
+            Crew Dashboard
+          </span>
+
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-full border border-white/35 bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20 transition"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       <div className="relative z-10 flex items-end justify-center h-screen pb-3 px-3 pt-16 sm:pb-4 sm:px-4 sm:pt-20">

@@ -1,3 +1,4 @@
+// LEGACY LOCAL TEST ONLY - DO NOT USE FOR PRODUCTION HEARTBEAT
 import { spawn } from "child_process";
 
 const intervalMs = Number(process.env.STATUS_CHECK_INTERVAL_MS || 60000);

@@ -1,3 +1,4 @@
+// LEGACY LOCAL TEST ONLY - DO NOT USE FOR PRODUCTION HEARTBEAT
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
