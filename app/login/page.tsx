@@ -31,11 +31,12 @@ const [loading, setLoading] = useState(false);
 
     setLoading(false);
 
-    if (res.ok) {
-      router.push("/");
-      router.refresh();
-      return;
-    }
+if (res.ok) {
+  const code = voucherCode.trim().toUpperCase();
+  router.push(`/crew/dashboard?voucherCode=${encodeURIComponent(code)}`);
+  router.refresh();
+  return;
+}
 
     setError("Wrong password");
   };
@@ -88,7 +89,8 @@ const [loading, setLoading] = useState(false);
     setLoading(false);
 
     if (res.ok) {
-      router.push("/voucher");
+      const code = voucherCode.trim().toUpperCase();
+router.push(`/crew/dashboard?voucherCode=${encodeURIComponent(code)}`);
       router.refresh();
       return;
     }
