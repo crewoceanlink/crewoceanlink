@@ -1166,6 +1166,15 @@ if (subscriptionsError) {
 
 console.log("SUBSCRIPTIONS:", subscriptionsData);
 
+const { data: partnersData, error: partnersError } = await supabase
+  .from("partners")
+  .select("*");
+
+if (partnersError) {
+  console.error("PARTNERS LOAD ERROR:", partnersError);
+  return;
+}
+
 let allUsage = [];
 let from = 0;
 const pageSize = 1000;
@@ -1470,6 +1479,10 @@ const routerOnline = isFreshStatus(lastSeenRouter);
 
 const starlinkOnline = isFreshStatus(lastSeenStarlink);
 
+const shipPartner = (partnersData || []).find((partner) => {
+  return String(partner.ship_id) === String(ship.id);
+});
+
   const mappedPlanType = Number(ship.plan_gb) >= 500 ? "large" : "small";
 
 return {
@@ -1477,6 +1490,7 @@ return {
     name: ship.name,
     model: ship.model,
     planType: mappedPlanType,
+    partnerName: shipPartner?.name || "—",
     currentCycleLabel,
 
 plan: {
@@ -1918,19 +1932,27 @@ border border-white/15
 shadow-inner
 ">
    <div className="p-6 h-full overflow-y-auto">
-<div className="flex items-center text-white/80 text-sm mb-3 tracking-wide whitespace-nowrap overflow-hidden">
+<div className="grid grid-cols-[29%_32%_39%] items-center text-white/80 text-sm mb-3 tracking-wide whitespace-nowrap overflow-hidden">
 
   {/* LEFT */}
-  <div className="w-[20%] overflow-hidden text-ellipsis">
+  <div className="overflow-hidden text-ellipsis">
     {selectedShip && (
       <>
-        {selectedShip.name} | {selectedShip.model} | {selectedShip.plan.name}
+        {selectedShip.name} | {selectedShip.model} | {selectedShip.plan.name} | Partner:{" "}
+        <a
+          href="/partner"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-white hover:underline"
+        >
+          {selectedShip.partnerName}
+        </a>
       </>
     )}
   </div>
 
   {/* TIME PERIOD */}
-  <div className="w-[28%] flex items-center gap-2">
+  <div className="flex items-center gap-2 justify-start pl-4">
     <span className="shrink-0">Time Period</span>
 
     <select
@@ -2008,7 +2030,7 @@ shadow-inner
   </div>
 
   {/* STATUS */}
-  <div className="w-[52%] flex items-center justify-start gap-4 overflow-hidden whitespace-nowrap text-xs xl:text-sm pl-8">
+  <div className="flex items-center justify-start gap-4 overflow-hidden whitespace-nowrap text-xs xl:text-sm pl-2">
 
     {selectedShip && (
       <>
