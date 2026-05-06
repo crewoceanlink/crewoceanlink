@@ -1,100 +1,166 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const OFFLINE_AFTER_MINUTES = 2;
+const REMINDER_30_MINUTES = 30;
+const REMINDER_2_HOURS = 120;
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const SHIP_ID = "SHIP-001";
-const OFFLINE_AFTER_MINUTES = 2;
-
-async function sendTelegramMessage(text: string) {
+async function sendTelegramMessage(message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!token || !chatId) return;
+  if (!token || !chatId) {
+    console.error("Missing Telegram environment variables");
+    return;
+  }
 
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
+      text: message,
     }),
   });
 }
 
-function isFresh(value: string | null) {
-  if (!value) return false;
+function minutesSince(dateValue: string | null) {
+  if (!dateValue) return null;
 
-  const ageMs = Date.now() - new Date(value).getTime();
-  return ageMs <= OFFLINE_AFTER_MINUTES * 60 * 1000;
+  const date = new Date(dateValue);
+  const now = new Date();
+
+  return (now.getTime() - date.getTime()) / 1000 / 60;
 }
 
 export async function GET() {
-  const { data, error } = await supabase
+  const { data: statuses, error } = await supabase
     .from("router_status")
-    .select("*")
-    .eq("ship_id", SHIP_ID)
-    .single();
+    .select("*");
 
-  if (error || !data) {
-    return NextResponse.json({ success: false, error }, { status: 500 });
+  if (error) {
+    console.error("router-status-cron select error:", error);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const routerFresh = isFresh(data.last_seen_router);
-  const starlinkFresh = isFresh(data.last_seen_starlink);
+  for (const status of statuses || []) {
+    const routerAge = minutesSince(status.last_seen_router);
+    const starlinkAge = minutesSince(status.last_seen_starlink);
 
-  const updates: any = {};
-  const messages: string[] = [];
+    const routerIsFresh =
+      routerAge !== null && routerAge <= OFFLINE_AFTER_MINUTES;
 
-  if (!routerFresh && data.router_online === true) {
-    updates.router_online = false;
-    updates.last_router_alert_at = new Date().toISOString();
-    messages.push("❌ Router OFFLINE");
-  }
+    const starlinkIsFresh =
+      starlinkAge !== null && starlinkAge <= OFFLINE_AFTER_MINUTES;
 
-  if (!starlinkFresh && data.starlink_online === true) {
-    updates.starlink_online = false;
-    updates.last_starlink_alert_at = new Date().toISOString();
-    messages.push("❌ Starlink OFFLINE");
-  }
+    const updates: Record<string, any> = {};
 
-  if (routerFresh && data.router_online === false) {
-    updates.router_online = true;
-    messages.push("✅ Router wieder ONLINE");
-  }
+    if (!routerIsFresh && status.router_online === true) {
+      await sendTelegramMessage(`❌ Router OFFLINE\nShip: ${status.ship_id}`);
 
-  if (starlinkFresh && data.starlink_online === false) {
-    updates.starlink_online = true;
-    messages.push("✅ Starlink wieder ONLINE");
-  }
+      updates.router_online = false;
+      updates.last_router_30m_alert_at = null;
+      updates.last_router_2h_alert_at = null;
+    }
 
-  if (Object.keys(updates).length > 0) {
-    updates.updated_at = new Date().toISOString();
+    if (!starlinkIsFresh && status.starlink_online === true) {
+      await sendTelegramMessage(`❌ Starlink OFFLINE\nShip: ${status.ship_id}`);
 
-    const { error: updateError } = await supabase
-      .from("router_status")
-      .update(updates)
-      .eq("ship_id", SHIP_ID);
+      updates.starlink_online = false;
+      updates.last_starlink_30m_alert_at = null;
+      updates.last_starlink_2h_alert_at = null;
+    }
 
-    if (updateError) {
-      return NextResponse.json(
-        { success: false, error: updateError },
-        { status: 500 }
+    if (routerIsFresh && status.router_online === false) {
+      await sendTelegramMessage(`✅ Router wieder ONLINE\nShip: ${status.ship_id}`);
+
+      updates.router_online = true;
+      updates.last_router_30m_alert_at = null;
+      updates.last_router_2h_alert_at = null;
+    }
+
+    if (starlinkIsFresh && status.starlink_online === false) {
+      await sendTelegramMessage(`✅ Starlink wieder ONLINE\nShip: ${status.ship_id}`);
+
+      updates.starlink_online = true;
+      updates.last_starlink_30m_alert_at = null;
+      updates.last_starlink_2h_alert_at = null;
+    }
+
+    if (
+      !routerIsFresh &&
+      status.router_online === false &&
+      routerAge !== null &&
+      routerAge >= REMINDER_30_MINUTES &&
+      !status.last_router_30m_alert_at
+    ) {
+      await sendTelegramMessage(
+        `⚠️ Router STILL OFFLINE seit 30 Minuten\nShip: ${status.ship_id}`
       );
+
+      updates.last_router_30m_alert_at = new Date().toISOString();
+    }
+
+    if (
+      !routerIsFresh &&
+      status.router_online === false &&
+      routerAge !== null &&
+      routerAge >= REMINDER_2_HOURS &&
+      !status.last_router_2h_alert_at
+    ) {
+      await sendTelegramMessage(
+        `⚠️ Router STILL OFFLINE seit 2 Stunden\nShip: ${status.ship_id}`
+      );
+
+      updates.last_router_2h_alert_at = new Date().toISOString();
+    }
+
+    if (
+      !starlinkIsFresh &&
+      status.starlink_online === false &&
+      starlinkAge !== null &&
+      starlinkAge >= REMINDER_30_MINUTES &&
+      !status.last_starlink_30m_alert_at
+    ) {
+      await sendTelegramMessage(
+        `⚠️ Starlink STILL OFFLINE seit 30 Minuten\nShip: ${status.ship_id}`
+      );
+
+      updates.last_starlink_30m_alert_at = new Date().toISOString();
+    }
+
+    if (
+      !starlinkIsFresh &&
+      status.starlink_online === false &&
+      starlinkAge !== null &&
+      starlinkAge >= REMINDER_2_HOURS &&
+      !status.last_starlink_2h_alert_at
+    ) {
+      await sendTelegramMessage(
+        `⚠️ Starlink STILL OFFLINE seit 2 Stunden\nShip: ${status.ship_id}`
+      );
+
+      updates.last_starlink_2h_alert_at = new Date().toISOString();
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error: updateError } = await supabase
+        .from("router_status")
+        .update(updates)
+        .eq("id", status.id);
+
+      if (updateError) {
+        console.error("router-status-cron update error:", updateError);
+      }
     }
   }
 
-  for (const msg of messages) {
-    await sendTelegramMessage(msg);
-  }
-
-  return NextResponse.json({
-    success: true,
-    routerFresh,
-    starlinkFresh,
-    messages,
-  });
+  return NextResponse.json({ ok: true });
 }
