@@ -1466,11 +1466,9 @@ const latestStatus = Array.isArray(routerStatusData)
 const lastSeenRouter = latestStatus?.last_seen_router || null;
 const lastSeenStarlink = latestStatus?.last_seen_starlink || null;
 
-const routerOnline =
-  latestStatus?.router_online === true && isFreshStatus(lastSeenRouter);
+const routerOnline = isFreshStatus(lastSeenRouter);
 
-const starlinkOnline =
-  latestStatus?.starlink_online === true && isFreshStatus(lastSeenStarlink);
+const starlinkOnline = isFreshStatus(lastSeenStarlink);
 
   const mappedPlanType = Number(ship.plan_gb) >= 500 ? "large" : "small";
 

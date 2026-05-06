@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "status:check": "node scripts/status-checker.js"
+    "status:check": "node scripts/status-checker.js",
+"status:watch": "node scripts/status-watcher.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
