@@ -489,14 +489,20 @@ const percent = Math.round(
                       className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow"
                     >
                       <div className="flex items-center justify-between gap-3">
-<div>
-  <div className="text-gray-800 font-semibold text-sm">
+<a
+  href={`/crew/dashboard?voucherCode=${encodeURIComponent(voucher.voucher_code)}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="flex items-center gap-3 hover:underline"
+>
+  <span className="text-gray-800 font-semibold text-sm">
     {voucher.voucher_type} voucher
-  </div>
-  <div className="text-gray-600 text-xs font-mono">
+  </span>
+
+  <span className="text-gray-800 font-semibold text-sm font-mono">
     {voucher.voucher_code}
-  </div>
-</div>
+  </span>
+</a>
 
                         <div className="flex-1 max-w-[220px]">
                           <input
@@ -517,7 +523,7 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                         </div>
 
                         <div
-                          className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${
+                          className={`rounded-full px-4 py-1.5 text-sm font-semibold whitespace-nowrap ${
                             isNearLimit
                               ? "bg-amber-100 text-amber-800"
                               : "bg-green-100 text-green-700"
@@ -549,61 +555,121 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
               </div>
             </div>
 
-            <div className="mt-5 rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
-              <h3 className="text-gray-800 text-base font-semibold">
-                Order new vouchers
-              </h3>
+            <div className="mt-5 rounded-2xl bg-white/[0.9] px-4 py-4 sm:px-5 sm:py-5 border border-white/20 shadow">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-lg font-bold shrink-0">
+                  $
+                </div>
 
-              <div className="mt-3 space-y-2">
-                {voucherTypes.map((item) => (
-                  <div
-                    key={item.size}
-                    className="flex items-center justify-between rounded-xl bg-white/70 border border-gray-200 px-3 py-2"
-                  >
-<div className="flex flex-col">
-  <div className="text-gray-800 font-semibold">
-    {item.size}
-  </div>
-
-  <div className="text-gray-600 text-xs">
-    Partner price: $
-    {getPriceRule(item.size)?.partner_price_usd?.toFixed(2) || "-"}
-  </div>
-
-  <div className="text-[11px] text-gray-500 mt-1">
-    Crew sales price: $
-    {getPriceRule(item.size)?.crew_price_usd?.toFixed(2) || "-"} · Mandatory
-  </div>
-</div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => updateQuantity(item.size, -1)}
-                        className="h-8 w-8 rounded-full bg-gray-200 text-gray-800 text-lg"
-                      >
-                        −
-                      </button>
-                      <div className="w-6 text-center text-gray-800 font-semibold">
-                        {quantities[item.size]}
-                      </div>
-                      <button
-                        onClick={() => updateQuantity(item.size, 1)}
-                        className="h-8 w-8 rounded-full bg-gray-800 text-white text-lg"
-                      >
-                        +
-                      </button>
-                    </div>
+                <div>
+                  <h3 className="text-gray-900 text-xl font-bold leading-tight">
+                    Order new vouchers
+                  </h3>
+                  <div className="text-gray-600 text-sm mt-1">
+                    Choose voucher size and quantity. Crew sales price is mandatory.
                   </div>
-                ))}
+                </div>
               </div>
 
-              <div className="mt-4 rounded-xl bg-white/70 border border-gray-200 p-3">
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-600">
+              <div className="rounded-2xl bg-gray-100/80 border border-gray-200 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[1.2fr_1.35fr_1.85fr_1fr] gap-4 px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
+                  <div>Voucher size</div>
+                  <div>Partner price</div>
+                  <div>Crew sales price</div>
+                  <div className="text-center">Quantity</div>
+                </div>
+
+                <div className="space-y-2 p-2">
+                  {voucherTypes.map((item) => {
+                    const rule = getPriceRule(item.size);
+                    const partnerPrice = rule?.partner_price_usd?.toFixed(2) || "-";
+                    const crewPrice = rule?.crew_price_usd?.toFixed(2) || "-";
+
+                    return (
+                      <div
+                        key={item.size}
+                        className="grid grid-cols-1 md:grid-cols-[1.2fr_1.35fr_1.85fr_1fr] gap-3 md:gap-4 items-center rounded-xl bg-white/90 border border-gray-200 px-4 py-4 shadow-sm"
+                      >
+                        <div className="flex items-center gap-3">
+<div className="h-9 w-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className="w-4 h-4"
+  >
+    <path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-3.89-3.39a1 1 0 1 0 1.41 1.41 3.5 3.5 0 0 1 4.95 0 1 1 0 1 0 1.41-1.41 5.5 5.5 0 0 0-7.77 0Zm-3.18-3.18a1 1 0 1 0 1.41 1.41 8 8 0 0 1 11.32 0 1 1 0 1 0 1.41-1.41 10 10 0 0 0-14.14 0Z" />
+  </svg>
+</div>
+
+                          <div className="text-gray-900 font-bold text-2xl md:text-xl">
+                            {item.size}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="md:hidden text-[11px] uppercase font-bold text-gray-400 mb-0.5">
+                            Partner price
+                          </div>
+                          <div className="text-gray-900 font-bold text-xl md:text-lg">
+                            ${partnerPrice}
+                          </div>
+                          <div className="text-gray-500 text-xs">
+                            Partner cost
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="md:hidden text-[11px] uppercase font-bold text-gray-400 mb-0.5">
+                            Crew sales price
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <div>
+                              <div className="text-gray-900 font-bold text-xl md:text-lg">
+                                ${crewPrice}
+                              </div>
+                              <div className="text-gray-500 text-xs">
+                                Mandatory resale price
+                              </div>
+                            </div>
+
+                            <div className="rounded-full bg-red-600 text-white px-3 py-1 text-xs font-bold whitespace-nowrap w-fit">
+                              MANDATORY
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-start md:justify-center gap-3">
+                          <button
+                            onClick={() => updateQuantity(item.size, -1)}
+                            className="h-9 w-9 rounded-full bg-gray-100 text-gray-800 text-lg border border-gray-200"
+                          >
+                            −
+                          </button>
+                          <div className="w-7 text-center text-gray-900 font-bold">
+                            {quantities[item.size]}
+                          </div>
+                          <button
+                            onClick={() => updateQuantity(item.size, 1)}
+                            className="h-9 w-9 rounded-full bg-gray-900 text-white text-lg"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-amber-50 border border-amber-100 p-4">
+                <div className="flex justify-between gap-3 items-center">
+                  <span className="text-gray-800 font-medium">
                     Total payable to CrewOceanLink
                   </span>
-                  <span className="text-gray-900 font-semibold text-lg">
-                    ${total}
+                  <span className="text-gray-900 font-bold text-2xl">
+                    ${Number(total || 0).toFixed(2)}
                   </span>
                 </div>
 
