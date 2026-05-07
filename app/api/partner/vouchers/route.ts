@@ -7,10 +7,18 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
-    const partnerId = cookieStore.get("partner_id")?.value;
+
+    const url = new URL(request.url);
+    const partnerIdFromUrl = url.searchParams.get("partnerId");
+
+    const adminAuth = cookieStore.get("admin_auth")?.value;
+    const partnerIdFromCookie = cookieStore.get("partner_id")?.value;
+
+    const partnerId =
+      partnerIdFromUrl && adminAuth ? partnerIdFromUrl : partnerIdFromCookie;
 
     if (!partnerId) {
       return NextResponse.json(

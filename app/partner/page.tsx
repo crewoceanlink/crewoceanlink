@@ -71,6 +71,15 @@ const activeSoldVouchers = realVouchers.filter(
   (v) => v.assigned_to && v.assigned_to !== ""
 );
 
+const nearLimitVouchers = activeSoldVouchers.filter((voucher) => {
+  const used = Number(voucher.gb_used || 0);
+  const totalGb = Number(voucher.gb_total || 0);
+
+  if (totalGb <= 0) return false;
+
+  return (used / totalGb) * 100 >= 80;
+});
+
 // 🔹 STOCK COUNT (für Anzeige oben)
 const stockCount = {
   "1GB": availableVouchers.filter(v => v.voucher_type === "1GB").length,
@@ -203,7 +212,13 @@ const total = useMemo(() => {
 useEffect(() => {
   const loadVouchers = async () => {
     try {
-      const res = await fetch("/api/partner/vouchers");
+      const partnerIdFromUrl = new URLSearchParams(window.location.search).get("partnerId");
+
+const res = await fetch(
+  partnerIdFromUrl
+    ? `/api/partner/vouchers?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
+    : "/api/partner/vouchers"
+);
       const data = await res.json();
 
 if (data.success) {
@@ -380,10 +395,17 @@ setAssignedNames(
                 <div className="text-amber-900 text-sm font-semibold">
                   Attention
                 </div>
-                <div className="text-amber-900/80 text-sm mt-1">
-                  2 vouchers are above 80% usage. Good opportunity to offer a
-                  new voucher personally.
-                </div>
+<div className="text-amber-900/80 text-sm mt-1">
+  {nearLimitVouchers.length > 0 ? (
+    <>
+      {nearLimitVouchers.length} voucher
+      {nearLimitVouchers.length === 1 ? " is" : "s are"} above 80% usage.
+      Good opportunity to offer a new voucher personally.
+    </>
+  ) : (
+    <>No attention items at the moment.</>
+  )}
+</div>
               </div>
             </div>
 

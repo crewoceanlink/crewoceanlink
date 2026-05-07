@@ -1490,8 +1490,9 @@ return {
     name: ship.name,
     model: ship.model,
     planType: mappedPlanType,
-    partnerName: shipPartner?.name || "—",
-    currentCycleLabel,
+partnerName: shipPartner?.name || "—",
+partnerId: shipPartner?.id || null,
+currentCycleLabel,
 
 plan: {
   name: mappedPlanType === "large" ? "Global Priority 500GB" : "Global Priority 50",
@@ -1940,13 +1941,17 @@ shadow-inner
       <>
         {selectedShip.name} | {selectedShip.model} | {selectedShip.plan.name} | Partner:{" "}
         <a
-          href="/partner"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-white hover:underline"
-        >
-          {selectedShip.partnerName}
-        </a>
+  href={
+    selectedShip.partnerId
+      ? `/partner?partnerId=${encodeURIComponent(selectedShip.partnerId)}`
+      : "/partner"
+  }
+  target="_blank"
+  rel="noopener noreferrer"
+  className="text-white hover:underline"
+>
+  {selectedShip.partnerName}
+</a>
       </>
     )}
   </div>
