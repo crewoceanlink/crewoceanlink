@@ -52,16 +52,33 @@ export async function GET() {
       .limit(1)
       .single();
 
+    const { data: pendingOrders, error: pendingOrdersError } = await supabase
+      .from("partner_orders")
+      .select("total_amount")
+      .eq("partner_id", partnerId)
+      .eq("payment_status", "pending");
+
+    if (pendingOrdersError) {
+      console.error("PENDING ORDERS LOAD ERROR:", pendingOrdersError);
+    }
+
+    const outstandingAmount = (pendingOrders || []).reduce(
+      (sum, order) => sum + Number(order.total_amount || 0),
+      0
+    );
+
     if (orderError || !lastOrder) {
       return NextResponse.json({
         success: true,
         last_order: null,
+        outstanding_amount: outstandingAmount,
       });
     }
 
     return NextResponse.json({
       success: true,
       last_order: lastOrder,
+      outstanding_amount: outstandingAmount,
     });
   } catch (err) {
     console.error("PARTNER LAST ORDER ERROR:", err);

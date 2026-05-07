@@ -53,6 +53,7 @@ export default function PartnerDashboardPage() {
 
 const [realVouchers, setRealVouchers] = useState([]);
 const [lastOrder, setLastOrder] = useState(null);
+const [outstandingAmount, setOutstandingAmount] = useState(0);
 const [priceRules, setPriceRules] = useState([]);
 const [partner, setPartner] = useState(null);
 const [ship, setShip] = useState(null);
@@ -253,9 +254,10 @@ setAssignedNames(
       const res = await fetch("/api/partner/order");
       const data = await res.json();
 
-      if (data.success) {
-        setLastOrder(data.last_order);
-      }
+if (data.success) {
+  setLastOrder(data.last_order);
+  setOutstandingAmount(Number(data.outstanding_amount || 0));
+}
     } catch (err) {
       console.error("LOAD LAST ORDER ERROR:", err);
     }
@@ -579,7 +581,7 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                   <div className="text-center">Quantity</div>
                 </div>
 
-                <div className="space-y-2 p-2">
+                <div className="space-y-2 p-1.5 sm:p-2">
                   {voucherTypes.map((item) => {
                     const rule = getPriceRule(item.size);
                     const partnerPrice = rule?.partner_price_usd?.toFixed(2) || "-";
@@ -588,7 +590,7 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                     return (
                       <div
                         key={item.size}
-                        className="grid grid-cols-1 md:grid-cols-[1.2fr_1.35fr_1.85fr_1fr] gap-3 md:gap-4 items-center rounded-xl bg-white/90 border border-gray-200 px-4 py-4 shadow-sm"
+                        className="grid grid-cols-[1fr_auto] md:grid-cols-[1.2fr_1.35fr_1.85fr_1fr] gap-3 md:gap-4 items-center rounded-xl bg-white/90 border border-gray-200 px-3 py-3 sm:px-4 sm:py-4 shadow-sm"
                       >
                         <div className="flex items-center gap-3">
 <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
@@ -735,37 +737,259 @@ body: JSON.stringify({
             </div>
 
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-2">
-<div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
-  <div className="text-gray-800 font-semibold">Last order</div>
+<div className="rounded-2xl bg-white/[0.9] px-4 py-4 border border-white/20 shadow">
+  <div className="flex items-start justify-between gap-3">
+    <div>
+      <div className="text-gray-900 font-bold text-lg">
+        Last order
+      </div>
 
-  <div className="text-gray-600 text-sm mt-2">
-    {lastOrder && Array.isArray(lastOrder.order_data) ? (
-      <>
-        {lastOrder.order_data.map((item, idx) => (
-          <div key={idx}>
-            {item.quantity}x {item.size}GB
-          </div>
-        ))}
+      <div className="text-gray-600 text-xs mt-1">
+        Latest submitted voucher order.
+      </div>
+    </div>
 
-        <div className="mt-1">
-          Status:{" "}
-          {lastOrder.payment_status === "paid"
-            ? "Paid"
-            : "Payment pending"}
-        </div>
-      </>
-    ) : (
-      <div>No orders yet</div>
-    )}
+    <div
+      className={`rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap ${
+        lastOrder?.payment_status === "paid"
+          ? "bg-green-100 text-green-700"
+          : "bg-amber-100 text-amber-700"
+      }`}
+    >
+      {lastOrder?.payment_status === "paid"
+        ? "PAID"
+        : "PAYMENT PENDING"}
+    </div>
   </div>
+
+  {lastOrder && Array.isArray(lastOrder.order_data) ? (
+    <>
+      <div className="mt-4 rounded-xl bg-gray-50 border border-gray-200 p-3">
+        <div className="text-gray-500 text-xs uppercase font-bold tracking-wide mb-2">
+          Order summary
+        </div>
+
+        <div className="space-y-2">
+          {lastOrder.order_data.map((item, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between gap-3"
+            >
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-3.5 h-3.5"
+                  >
+                    <path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-3.89-3.39a1 1 0 1 0 1.41 1.41 3.5 3.5 0 0 1 4.95 0 1 1 0 1 0 1.41-1.41 5.5 5.5 0 0 0-7.77 0Zm-3.18-3.18a1 1 0 1 0 1.41 1.41 8 8 0 0 1 11.32 0 1 1 0 1 0 1.41-1.41 10 10 0 0 0-14.14 0Z" />
+                  </svg>
+                </div>
+
+                <div>
+                  <div className="text-gray-900 font-semibold">
+                    {item.quantity}x {item.size}GB
+                  </div>
+
+                  <div className="text-gray-500 text-xs">
+                    Voucher package
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-gray-900 font-bold">
+                  $
+                  {(
+                    Number(item.price || 0) *
+                    Number(item.quantity || 0)
+                  ).toFixed(2)}
+                </div>
+
+                <div className="text-gray-500 text-xs">
+                  Total
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-green-50 border border-green-100 p-3">
+          <div className="text-green-700 text-xs font-bold uppercase">
+            Payment
+          </div>
+
+          <div className="mt-1 text-green-900 font-semibold">
+            {lastOrder.payment_status === "paid"
+              ? "Confirmed"
+              : "Awaiting payment"}
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
+          <div className="text-blue-700 text-xs font-bold uppercase">
+            Delivery
+          </div>
+
+          <div className="mt-1 text-blue-900 font-semibold">
+            {lastOrder.payment_status === "paid"
+              ? "Vouchers delivered"
+              : "Waiting for payment"}
+          </div>
+        </div>
+      </div>
+    </>
+  ) : (
+    <div className="mt-4 rounded-xl bg-gray-50 border border-gray-200 p-4">
+      <div className="text-gray-900 font-semibold">
+        No orders yet
+      </div>
+
+      <div className="text-gray-500 text-sm mt-1">
+        Your latest voucher order will appear here.
+      </div>
+    </div>
+  )}
 </div>
 
-              <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
-                <div className="text-gray-800 font-semibold">Payment info</div>
-                <div className="text-gray-600 text-sm mt-2">
-                  <div>Outstanding: $56</div>
-                  <div>Ship MoneyCard or Revolut</div>
-                  <div className="mt-1">Delivery after payment confirmation</div>
+              <div className="rounded-2xl bg-white/[0.9] px-4 py-4 border border-white/20 shadow">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-gray-900 font-bold text-lg">
+                      Payment info
+                    </div>
+                    <div className="text-gray-600 text-xs mt-1">
+                      Pay outstanding partner orders.
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-gray-500 text-xs">
+                      Outstanding
+                    </div>
+                    <div className="text-gray-900 font-bold text-xl">
+                      ${Number(outstandingAmount || 0).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl bg-gray-50 border border-gray-200 p-3">
+                  <div className="text-gray-800 font-semibold text-sm">
+                    Revolut
+                  </div>
+
+                  <div className="text-gray-600 text-xs mt-1">
+                    Fastest payment method. Amount must be entered manually.
+                  </div>
+
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <a
+                      href="https://revolut.me/mikepc5i5"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 rounded-xl bg-gray-900 text-white text-center py-2 text-sm font-semibold"
+                    >
+                      Pay with Revolut
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText("@mike4pc515");
+                        alert("Revolut tag copied");
+                      }}
+                      className="rounded-xl bg-white border border-gray-200 text-gray-800 px-3 py-2 text-sm font-semibold"
+                    >
+                      Copy Revtag
+                    </button>
+                  </div>
+
+                  <div className="mt-2 text-gray-500 text-xs">
+                    Revtag: @mike4pc515
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 p-3">
+                  <div className="text-gray-800 font-semibold text-sm">
+                    ShipMoneyCard
+                  </div>
+
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-gray-500 text-xs">
+                          Recipient Last Name
+                        </div>
+                        <div className="text-gray-900 font-semibold">
+                          Panser
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("Panser");
+                          alert("Recipient last name copied");
+                        }}
+                        className="rounded-lg bg-white border border-amber-200 text-gray-800 px-3 py-1.5 text-xs font-semibold"
+                      >
+                        Copy
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-gray-500 text-xs">
+                          Customer ID
+                        </div>
+                        <div className="text-gray-900 font-semibold">
+                          0023287868
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("0023287868");
+                          alert("Customer ID copied");
+                        }}
+                        className="rounded-lg bg-white border border-amber-200 text-gray-800 px-3 py-1.5 text-xs font-semibold"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl bg-white/70 border border-gray-200 p-3">
+                  <div className="text-gray-500 text-xs">
+                    Payment reference
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <div className="text-gray-900 text-sm font-semibold">
+                      {partner?.name || "Partner"} · {ship?.name || "Ship"}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `${partner?.name || "Partner"} · ${ship?.name || "Ship"}`
+                        );
+                        alert("Payment reference copied");
+                      }}
+                      className="rounded-lg bg-white border border-gray-200 text-gray-800 px-3 py-1.5 text-xs font-semibold"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-gray-600 text-xs">
+                  Vouchers are delivered after payment confirmation.
                 </div>
               </div>
             </div>
