@@ -239,12 +239,23 @@ function CrewDashboardContent() {
           </div>
 
           <div className="pt-2 shrink-0">
-            <div className="rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-2 sm:py-2.5">
-              <div className="text-white text-sm">Private crew access</div>
-              <div className="text-white/70 text-xs mt-0.5">
-                One voucher. One device. Live data tracking.
-              </div>
-            </div>
+<div className="rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-2 sm:py-2.5 flex items-center justify-between gap-4">
+  <div>
+    <div className="text-white text-sm">Private crew access</div>
+    <div className="text-white/70 text-xs mt-0.5">
+      One voucher. One device. Live data tracking.
+    </div>
+  </div>
+
+  <a
+    href="/terms/crew"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="shrink-0 text-white/90 hover:text-white text-xs sm:text-sm font-medium"
+  >
+    Crew Terms & Fair Use →
+  </a>
+</div>
 
             <div className="mt-2 text-center text-white/75 text-[11px] sm:text-xs space-y-0.5">
               <div>
