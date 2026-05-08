@@ -17,6 +17,7 @@ function CrewDashboardContent() {
 
   const [loading, setLoading] = useState(true);
   const [voucher, setVoucher] = useState(null);
+  const [partnerName, setPartnerName] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -43,6 +44,7 @@ function CrewDashboardContent() {
         }
 
         setVoucher(data.voucher);
+        setPartnerName(data.voucher?.assigned_to || "your crew partner");
       } catch (err) {
         console.error(err);
         setError("Failed to load voucher");
@@ -71,6 +73,44 @@ function CrewDashboardContent() {
 
   const formatGB = (value) => `${Number(value || 0).toFixed(3)} GB`;
 
+    const getVoucherRecommendation = (type) => {
+    const key = String(type || "").toUpperCase();
+
+    if (key === "1GB") return "Good for messaging & light browsing";
+    if (key === "5GB") return "Recommended for daily browsing & calls";
+    if (key === "10GB") return "Better for streaming & regular use";
+    if (key === "20GB") return "Recommended for heavy users & streaming";
+    if (key === "50GB") return "Best for long voyages & shared usage";
+
+    return "Recommended for onboard internet access";
+  };
+
+  const getVoucherPrice = (type, planType) => {
+    const key = String(type || "").toUpperCase();
+    const plan = String(planType || "").toLowerCase();
+
+    const prices = {
+      small: {
+        "1GB": 7,
+        "5GB": 34,
+        "10GB": 67,
+        "20GB": 132,
+        "50GB": 330,
+      },
+      large: {
+        "1GB": 5,
+        "5GB": 24,
+        "10GB": 45,
+        "20GB": 85,
+        "50GB": 200,
+      },
+    };
+
+    return prices[plan]?.[key] || 0;
+  };
+
+  const voucherOptions = ["1GB", "5GB", "10GB", "20GB", "50GB"];
+
   const totalGb = Number(voucher?.gb_total || 0);
   const realUsedGb = Number(voucher?.gb_used || 0);
 
@@ -86,6 +126,7 @@ function CrewDashboardContent() {
   const remainingPercent =
     totalGb > 0 ? Math.max(0, (displayRemainingGb / totalGb) * 100) : 0;
 
+  const isNearLimit = remainingPercent <= 20 && !isVoucherUsed;
   let statusText = "Ready";
   let statusColor = "bg-green-400";
   let barColor = "bg-green-500";
@@ -229,10 +270,76 @@ function CrewDashboardContent() {
                 </div>
 
                 <div className="rounded-xl bg-white/[0.85] px-4 py-2.5 border border-white/20 shadow">
-                  <div className="text-gray-600 text-sm">Plan</div>
+                  <div className="text-gray-600 text-sm">Recommended for</div>
                   <div className="text-sm sm:text-base font-semibold text-gray-800">
-                    {voucher.plan_type}
+                    {getVoucherRecommendation(voucher.voucher_type)}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {(isNearLimit || isVoucherUsed) && (
+              <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 border border-amber-200 shadow">
+                <div className="text-amber-900 font-semibold text-sm">
+                  {isVoucherUsed ? "Voucher exhausted" : "You are running low on data"}
+                </div>
+                <div className="text-amber-900/80 text-sm mt-1">
+                  {isVoucherUsed
+                    ? `Your voucher has no data remaining. Please contact ${partnerName} onboard to purchase a new voucher.`
+                    : `Your voucher is above 80% usage. You have ${formatGB(displayRemainingGb)} remaining. Contact ${partnerName} onboard if you need a new voucher soon.`}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 rounded-2xl bg-black/25 backdrop-blur-[6px] border border-white/15 px-4 py-4 shadow">
+              <div className="text-white text-sm font-medium">
+                Choosing the right voucher size
+              </div>
+              <div className="text-white/65 text-xs mt-0.5">
+                Pick the voucher that best fits your needs.
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
+                {voucherOptions.map((type) => (
+                  <div
+                    key={type}
+                    className={`rounded-xl border px-3 py-3 min-h-[118px] ${
+                      type === "1GB"
+                        ? "bg-cyan-500/15 border-cyan-300/25"
+                        : type === "5GB"
+                          ? "bg-green-500/15 border-green-300/25"
+                          : type === "10GB"
+                            ? "bg-violet-500/15 border-violet-300/25"
+                            : type === "20GB"
+                              ? "bg-orange-500/15 border-orange-300/25"
+                              : "bg-red-500/15 border-red-300/25"
+                    }`}
+                  >
+                    <div className="text-white text-sm font-semibold">
+                      {type}
+                    </div>
+                    <div className="text-white/75 text-xs mt-2 leading-snug min-h-[46px]">
+                      {getVoucherRecommendation(type)}
+                    </div>
+                    <div className="text-white text-sm font-semibold mt-3">
+                      ${getVoucherPrice(type, voucher.plan_type).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 rounded-xl bg-white/[0.06] border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <div className="text-white text-sm font-medium">
+                    Need a new voucher?
+                  </div>
+                  <div className="text-white/65 text-xs mt-0.5">
+                    Contact your crew partner onboard to purchase a new voucher.
+                  </div>
+                </div>
+
+                <div className="text-white/80 text-xs sm:text-sm">
+                  Contact {partnerName} onboard for available voucher stock.
                 </div>
               </div>
             </div>
