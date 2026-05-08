@@ -379,13 +379,16 @@ useEffect(() => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
                 <div className="text-gray-600 text-sm">Voucher stock</div>
-                <div className="mt-2 grid grid-cols-2 gap-1 text-sm font-semibold text-gray-800">
-{voucherTypes.map((item) => (
-  <div key={item.size}>
-    {item.size}: {stockCount[item.size] || 0}
-  </div>
-))}
-                </div>
+<div className="mt-2 grid grid-cols-2 gap-x-8 gap-y-1 text-sm font-semibold text-gray-800">
+  <div>1GB: {stockCount["1GB"] || 0}</div>
+  <div>10GB: {stockCount["10GB"] || 0}</div>
+
+  <div>5GB: {stockCount["5GB"] || 0}</div>
+  <div>20GB: {stockCount["20GB"] || 0}</div>
+
+  <div></div>
+  <div>50GB: {stockCount["50GB"] || 0}</div>
+</div>
               </div>
 
               <div className="rounded-xl bg-white/[0.85] px-4 py-3 border border-white/20 shadow">
@@ -432,59 +435,72 @@ useEffect(() => {
   </h3>
 
   {availableVouchers.length === 0 ? (
-    <div className="rounded-xl bg-white/[0.85] px-4 py-4 border border-white/20 shadow">
-      <div className="text-gray-800 font-semibold text-sm">
-        No available vouchers
+    <div className="rounded-xl bg-amber-50 px-4 py-4 border border-amber-200 shadow">
+      <div className="text-amber-900 font-semibold text-sm">
+        No sellable vouchers available
       </div>
-      <div className="text-gray-600 text-sm mt-1">
-        All vouchers are currently assigned. New vouchers will appear here after an order is fulfilled.
+      <div className="text-amber-900/80 text-sm mt-1">
+        No unassigned vouchers are currently available. Maintaining a small onboard stock is recommended to continue voucher sales without delay.
       </div>
     </div>
   ) : (
-    <div className="space-y-2">
-      {availableVouchers.map((voucher) => (
-        <div
-          key={voucher.id}
-          className="rounded-xl bg-green-50 px-4 py-3 border border-green-200 shadow"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <div className="text-green-800 font-semibold text-sm">
-                {voucher.voucher_type} voucher
-              </div>
-              <div className="text-green-700 text-xs font-mono">
-                {voucher.voucher_code}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <input
-                type="text"
-                defaultValue=""
-                placeholder="Customer name"
-                onBlur={(e) => saveAssignedName(voucher, e.target.value)}
-                className="
-                  w-full sm:w-[180px] rounded-lg border border-green-200
-                  bg-white px-3 py-1.5 text-xs text-gray-800
-                  placeholder:text-gray-400 outline-none
-                  focus:border-green-500
-                "
-              />
-
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(voucher.voucher_code);
-                  alert("Voucher code copied");
-                }}
-                className="px-3 py-1.5 text-xs bg-green-700 text-white rounded-lg"
-              >
-                Copy
-              </button>
-            </div>
+    <>
+      {availableVouchers.length < 3 && (
+        <div className="rounded-xl bg-amber-50 px-4 py-4 border border-amber-200 shadow mb-2">
+          <div className="text-amber-900 font-semibold text-sm">
+            Low voucher stock
+          </div>
+          <div className="text-amber-900/80 text-sm mt-1">
+            Your available voucher inventory is running low. Maintaining a small onboard stock is recommended.
           </div>
         </div>
-      ))}
-    </div>
+      )}
+
+      <div className="space-y-2">
+        {availableVouchers.map((voucher) => (
+          <div
+            key={voucher.id}
+            className="rounded-xl bg-green-50 px-4 py-3 border border-green-200 shadow"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="text-green-800 font-semibold text-sm">
+                  {voucher.voucher_type} voucher
+                </div>
+                <div className="text-green-700 text-xs font-mono">
+                  {voucher.voucher_code}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <input
+                  type="text"
+                  defaultValue=""
+                  placeholder="Customer name"
+                  onBlur={(e) => saveAssignedName(voucher, e.target.value)}
+                  className="
+                    w-full sm:w-[180px] rounded-lg border border-green-200
+                    bg-white px-3 py-1.5 text-xs text-gray-800
+                    placeholder:text-gray-400 outline-none
+                    focus:border-green-500
+                  "
+                />
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(voucher.voucher_code);
+                    alert("Voucher code copied");
+                  }}
+                  className="px-3 py-1.5 text-xs bg-green-700 text-white rounded-lg"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   )}
 </div>
 
