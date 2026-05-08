@@ -171,16 +171,23 @@ const total = useMemo(() => {
     if (!assignedTo) return;
 
     try {
-      const res = await fetch("/api/partner/vouchers/assign", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          voucher_id: voucher.id,
-          assigned_to: assignedTo,
-        }),
-      });
+const partnerIdFromUrl = new URLSearchParams(window.location.search).get("partnerId");
+
+      const res = await fetch(
+        partnerIdFromUrl
+          ? `/api/partner/vouchers/assign?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
+          : "/api/partner/vouchers/assign",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            voucher_id: voucher.id,
+            assigned_to: assignedTo,
+          }),
+        }
+      );
 
       const data = await res.json();
 
@@ -194,56 +201,60 @@ const total = useMemo(() => {
         [voucher.voucher_code]: assignedTo,
       }));
 
-      setRealVouchers((prev) =>
-        prev.map((v) =>
-          v.id === voucher.id
-            ? {
-                ...v,
-                assigned_to: assignedTo,
-              }
-            : v
-        )
-      );
+setRealVouchers((prev) =>
+  prev.map((v) =>
+    v.id === voucher.id
+      ? {
+          ...v,
+          assigned_to: assignedTo,
+          assigned_at: new Date().toISOString(),
+        }
+      : v
+  )
+);
+
+await loadPartnerDashboardData();
     } catch (err) {
       console.error("ASSIGN VOUCHER ERROR:", err);
       alert("Assign failed");
     }
   };
 
-useEffect(() => {
+const loadPartnerDashboardData = async () => {
   const loadVouchers = async () => {
     try {
       const partnerIdFromUrl = new URLSearchParams(window.location.search).get("partnerId");
 
-const res = await fetch(
-  partnerIdFromUrl
-    ? `/api/partner/vouchers?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
-    : "/api/partner/vouchers"
-);
+      const res = await fetch(
+        partnerIdFromUrl
+          ? `/api/partner/vouchers?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
+          : "/api/partner/vouchers"
+      );
+
       const data = await res.json();
 
-if (data.success) {
-  console.log("PARTNER VOUCHERS FROM API:", data.vouchers);
+      if (data.success) {
+        console.log("PARTNER VOUCHERS FROM API:", data.vouchers);
 
-setRealVouchers(data.vouchers || []);
-setPriceRules(data.price_rules || []);
-setPartner(data.partner || null);
-setShip(data.ship || null);
+        setRealVouchers(data.vouchers || []);
+        setPriceRules(data.price_rules || []);
+        setPartner(data.partner || null);
+        setShip(data.ship || null);
 
-setCurrentCycle({
-  start: data.cycle_start || null,
-  end: data.cycle_end || null,
-});
+        setCurrentCycle({
+          start: data.cycle_start || null,
+          end: data.cycle_end || null,
+        });
 
-setAssignedNames(
-    Object.fromEntries(
-      data.vouchers.map((v) => [
-        v.voucher_code,
-        v.assigned_to || "",
-      ])
-    )
-  );
-}
+        setAssignedNames(
+          Object.fromEntries(
+            (data.vouchers || []).map((v) => [
+              v.voucher_code,
+              v.assigned_to || "",
+            ])
+          )
+        );
+      }
     } catch (err) {
       console.error("LOAD PARTNER VOUCHERS ERROR:", err);
     }
@@ -254,17 +265,21 @@ setAssignedNames(
       const res = await fetch("/api/partner/order");
       const data = await res.json();
 
-if (data.success) {
-  setLastOrder(data.last_order);
-  setOutstandingAmount(Number(data.outstanding_amount || 0));
-}
+      if (data.success) {
+        setLastOrder(data.last_order);
+        setOutstandingAmount(Number(data.outstanding_amount || 0));
+      }
     } catch (err) {
       console.error("LOAD LAST ORDER ERROR:", err);
     }
   };
 
-  loadVouchers();
-  loadLastOrder();
+  await loadVouchers();
+  await loadLastOrder();
+};
+
+useEffect(() => {
+  loadPartnerDashboardData();
 }, []);
 
   return (
@@ -700,7 +715,13 @@ const items = voucherTypes
                       return;
                     }
 
-                    const res = await fetch("/api/partner/order", {
+                    const partnerIdFromUrl = new URLSearchParams(window.location.search).get("partnerId");
+
+const res = await fetch(
+  partnerIdFromUrl
+    ? `/api/partner/order?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
+    : "/api/partner/order",
+  {
                       method: "POST",
                       headers: {
                         "Content-Type": "application/json",
@@ -708,21 +729,24 @@ const items = voucherTypes
 body: JSON.stringify({
   items,
   total_amount: total,
-}),
-                    });
+    }),
+  }
+);
 
                     const data = await res.json();
 
-                    if (data.success) {
-                      alert("Order submitted successfully");
-                      setQuantities({
-                        "1GB": 0,
-                        "5GB": 0,
-                        "10GB": 0,
-                        "20GB": 0,
-                        "50GB": 0,
-                      });
-                    } else {
+if (data.success) {
+  alert("Order submitted successfully");
+  setQuantities({
+    "1GB": 0,
+    "5GB": 0,
+    "10GB": 0,
+    "20GB": 0,
+    "50GB": 0,
+  });
+
+  await loadPartnerDashboardData();
+} else {
                       alert(data.message || "Order failed");
                     }
                   } catch (err) {

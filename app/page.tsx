@@ -2202,7 +2202,7 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
   {formatUSD(getNetProfitUSD(selectedShip))}
 </div>
         <div className="text-[10px] text-gray-500 leading-none mt-1">
-          Unit Profit
+          Net Profit
         </div>
       </div>
 
