@@ -64,6 +64,13 @@ export default async function handler(req, res) {
       lines.push(
         `:do { /ip hotspot user enable [find name="${code}"] } on-error={}`
       );
+            lines.push(
+        `:local activeIds [/ip hotspot active find user="${code}"]; :if ([:len $activeIds] > 1) do={ /ip hotspot active remove $activeIds }`
+      );
+
+      lines.push(
+        `:local cookieIds [/ip hotspot cookie find user="${code}"]; :if ([:len $cookieIds] > 1) do={ /ip hotspot cookie remove $cookieIds }`
+      );
     }
 
     if (status === "exhausted" || status === "blocked" || status === "expired") {
