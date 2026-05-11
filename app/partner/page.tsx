@@ -11,6 +11,58 @@ const voucherTypes = [
   { size: "50GB" },
 ];
 
+const USD_PER_EUR = 1 / 0.85;
+
+const getVoucherGb = (voucher) => {
+  const type = String(voucher.voucher_type || "").toUpperCase();
+
+  if (type === "1GB") return 1;
+  if (type === "5GB") return 5;
+  if (type === "10GB") return 10;
+  if (type === "20GB") return 20;
+  if (type === "50GB") return 50;
+
+  return Number(voucher.gb_total || 0);
+};
+
+const getPartnerNetProfitForVouchers = (vouchers, ship) => {
+  if (!ship || !Array.isArray(vouchers) || vouchers.length === 0) return 0;
+
+  const model = String(ship.model || "").toUpperCase();
+
+  const revenue = vouchers.reduce(
+    (sum, voucher) => sum + Number(voucher.crew_price_usd || 0),
+    0
+  );
+
+  const soldGB = vouchers.reduce(
+    (sum, voucher) => sum + getVoucherGb(voucher),
+    0
+  );
+
+  const planGB = Number(ship.plan_gb || 0);
+  const planPriceEUR = Number(ship.plan_price_eur || 0);
+  const hardwareEUR = Number(ship.hardware_eur || 0);
+
+  const operatingCostUSD =
+    planGB > 0 ? (planPriceEUR * USD_PER_EUR / planGB) * soldGB : 0;
+
+  const cycleCount = planGB >= 500 ? planGB / 500 : planGB / 50;
+  const hardwareDepreciationUSD =
+    model === "M1" ? 0 : ((hardwareEUR / 24) * cycleCount) * USD_PER_EUR;
+
+  const proportionalHardwareCostUSD =
+    planGB > 0 ? hardwareDepreciationUSD * (soldGB / planGB) : 0;
+
+  const totalProfit =
+    revenue - operatingCostUSD - proportionalHardwareCostUSD;
+
+  if (model === "M1") return totalProfit * 0.5;
+  if (model === "M2") return totalProfit * 0.7;
+
+  return totalProfit;
+};
+
 const activeVouchers = [
   {
     code: "HXB940J6",
@@ -110,11 +162,7 @@ const todayRevenue = todaySoldVouchers.reduce(
   0
 );
 
-const todayProfit = todaySoldVouchers.reduce(
-  (sum, v) =>
-    sum + ((v.crew_price_usd || 0) - (v.your_revenue_usd || 0)),
-  0
-);
+const todayProfit = getPartnerNetProfitForVouchers(todaySoldVouchers, ship);
 
 const cycleSoldVouchers = realVouchers.filter((v) => {
   if (!v.assigned_to) return false;
@@ -136,11 +184,7 @@ const cycleRevenue = cycleSoldVouchers.reduce(
   0
 );
 
-const cycleProfit = cycleSoldVouchers.reduce(
-  (sum, v) =>
-    sum + ((v.crew_price_usd || 0) - (v.your_revenue_usd || 0)),
-  0
-);
+const cycleProfit = getPartnerNetProfitForVouchers(cycleSoldVouchers, ship);
 
 const total = useMemo(() => {
   return voucherTypes.reduce((sum, item) => {
