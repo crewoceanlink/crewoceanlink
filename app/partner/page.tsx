@@ -769,7 +769,7 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
   Payment methods: Ship MoneyCard or Revolut
 </div>
 
-{directSalesCredit > 0 && (
+{Number(directSalesCredit || 0) >= 0.01 && (
   <div className="text-green-700 text-xs mt-1 font-semibold">
     Direct sales credit applied: -${Number(directSalesCredit || 0).toFixed(2)}
   </div>
