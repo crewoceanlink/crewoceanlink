@@ -15,6 +15,7 @@ const [securityChecks, setSecurityChecks] = useState([]);
 const [partnerOrders, setPartnerOrders] = useState([]);
 const [partnerOrdersFilter, setPartnerOrdersFilter] = useState("pending");
 const [directSales, setDirectSales] = useState([]);
+const [directSalePriceRules, setDirectSalePriceRules] = useState([]);
 const [selectedShipIndex, setSelectedShipIndex] = useState(() => {
   if (typeof window === "undefined") return 0;
 
@@ -1607,18 +1608,27 @@ const loadPartnerOrders = async () => {
 const loadDirectSales = async () => {
   const { data, error } = await supabase
     .from("crew_vouchers")
-    .select("id, ship_id, voucher_code, voucher_type, gb_total, gb_used, status, assigned_to, crew_price_usd, your_revenue_usd, created_at, assigned_at, partner_order_id, created_by")
+    .select("id, ship_id, voucher_code, voucher_type, plan_type, gb_total, gb_used, status, assigned_to, crew_price_usd, your_revenue_usd, created_at, assigned_at, partner_order_id, created_by")
     .is("partner_order_id", null)
-    .not("assigned_to", "is", null)
-    .neq("assigned_to", "")
-    .order("assigned_at", { ascending: false });
+    .eq("created_by", "admin")
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("DIRECT SALES LOAD ERROR:", error);
     return;
   }
 
+  const { data: rulesData, error: rulesError } = await supabase
+    .from("voucher_price_rules")
+    .select("*")
+    .eq("active", true);
+
+  if (rulesError) {
+    console.error("DIRECT SALES PRICE RULES LOAD ERROR:", rulesError);
+  }
+
   setDirectSales(data || []);
+  setDirectSalePriceRules(rulesData || []);
 };
 
 const markPartnerOrderPaid = async (orderId) => {
@@ -1749,6 +1759,29 @@ const visibleDirectSales = directSales.filter((voucher) => {
   if (!selectedShip) return false;
   return String(voucher.ship_id) === String(selectedShip.id);
 });
+
+const getDirectSalePartnerCredit = (voucher) => {
+  if (!selectedShip) return 0;
+
+  const model = String(selectedShip.model || "").toUpperCase();
+
+  if (model === "M3") return 0;
+
+  const rule = directSalePriceRules.find((rule) => {
+    return (
+      String(rule.plan_type || "").toLowerCase() === String(selectedShip.planType || "").toLowerCase() &&
+      String(rule.commission_model || "").toUpperCase() === model &&
+      String(rule.voucher_type || "").toUpperCase() === String(voucher.voucher_type || "").toUpperCase()
+    );
+  });
+
+  const crewPrice = Number(voucher.crew_price_usd || rule?.crew_price_usd || 0);
+  const partnerPrice = Number(rule?.partner_price_usd || 0);
+
+  const credit = crewPrice - partnerPrice;
+
+  return credit > 0 ? credit : 0;
+};
 
 const selectedSecurity = selectedShip
   ? securityChecks.find((s) => String(s.ship_id) === String(selectedShip.id))
@@ -2391,9 +2424,9 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
               className="rounded-xl bg-white/70 border border-white/30 px-4 py-3 text-sm"
             >
               <div className="grid grid-cols-12 gap-3 items-center">
-                <div className="col-span-2 text-gray-700 font-medium">
-                  {order.partner_name}
-                </div>
+<div className="col-span-2 text-gray-700 font-medium">
+  {voucher.assigned_to || "Not assigned"}
+</div>
 
                 <div className="col-span-3 text-gray-600">
                   {items}
@@ -2561,8 +2594,12 @@ return (
                   {usagePercent}%
                 </div>
 
-<div className="col-span-2 text-gray-700 font-semibold">
+<div className="col-span-1 text-gray-700 font-semibold">
   ${Number(voucher.crew_price_usd || 0).toFixed(2)}
+</div>
+
+<div className="col-span-1 text-gray-700 font-semibold">
+  ${Number(getDirectSalePartnerCredit(voucher) || 0).toFixed(2)}
 </div>
 
                 <div className="col-span-2 text-right">
