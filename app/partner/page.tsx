@@ -769,7 +769,7 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
   Payment methods: Ship MoneyCard or Revolut
 </div>
 
-{Number(directSalesCredit || 0) >= 0.01 && (
+{Number(directSalesCredit || lastOrder?.credit_applied_usd || 0) >= 0.01 && (
   <div className="text-green-700 text-xs mt-1 font-semibold">
     Direct sales credit applied: -${Number(directSalesCredit || 0).toFixed(2)}
   </div>
@@ -867,18 +867,20 @@ if (data.success) {
     </div>
   </div>
 
-  {directSalesCredit > 0 && (
+  {Number(directSalesCredit || lastOrder?.credit_applied_usd || 0) >= 0.01 && (
     <div className="mt-4 rounded-xl bg-green-50 border border-green-100 p-3">
       <div className="text-green-700 text-xs font-bold uppercase">
         Direct Sales Credit
       </div>
 
       <div className="mt-1 text-green-900 font-bold text-xl">
-        ${Number(directSalesCredit || 0).toFixed(2)}
+        ${Number(directSalesCredit || lastOrder?.credit_applied_usd || 0).toFixed(2)}
       </div>
 
       <div className="text-green-800/80 text-xs mt-1">
-        Credit from direct crew sales handled by CrewOceanLink. This amount will be deducted from your next voucher order.
+{Number(directSalesCredit || 0) > 0
+  ? "Credit from direct crew sales handled by CrewOceanLink. This amount will be deducted from your next voucher order."
+  : "Credit from direct crew sales was applied to this voucher order."}
       </div>
     </div>
   )}
