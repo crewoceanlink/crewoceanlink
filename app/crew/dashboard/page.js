@@ -63,12 +63,15 @@ function CrewDashboardContent() {
   }, [voucherCode]);
 
   const logout = async () => {
-    await fetch("/api/voucher/logout", {
-      method: "POST",
-    });
+    try {
+      await fetch("/api/voucher/logout", {
+        method: "POST",
+      });
+    } catch (err) {
+      console.error("Dashboard logout cleanup failed:", err);
+    }
 
-    router.push("/login");
-    router.refresh();
+    window.location.href = "http://10.10.10.1/logout";
   };
 
   const formatGB = (value) => `${Number(value || 0).toFixed(3)} GB`;
