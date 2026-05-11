@@ -307,13 +307,20 @@ const loadPartnerDashboardData = async () => {
 
   const loadLastOrder = async () => {
     try {
-      const res = await fetch("/api/partner/order");
+      const partnerIdFromUrl = new URLSearchParams(window.location.search).get("partnerId");
+
+      const res = await fetch(
+        partnerIdFromUrl
+          ? `/api/partner/order?partnerId=${encodeURIComponent(partnerIdFromUrl)}`
+          : "/api/partner/order"
+      );
+
       const data = await res.json();
 
       if (data.success) {
         setLastOrder(data.last_order);
         setOutstandingAmount(Number(data.outstanding_amount || 0));
-setDirectSalesCredit(Number(data.direct_sales_credit || 0));
+        setDirectSalesCredit(Number(data.direct_sales_credit || 0));
       }
     } catch (err) {
       console.error("LOAD LAST ORDER ERROR:", err);
@@ -913,17 +920,17 @@ if (data.success) {
               </div>
 
               <div className="text-right">
-                <div className="text-gray-900 font-bold">
-                  $
-                  {(
-                    Number(item.price || 0) *
-                    Number(item.quantity || 0)
-                  ).toFixed(2)}
-                </div>
+<div className="text-gray-900 font-bold">
+  $
+  {(
+    Number(item.price || 0) *
+    Number(item.quantity || 0)
+  ).toFixed(2)}
+</div>
 
-                <div className="text-gray-500 text-xs">
-                  Total
-                </div>
+<div className="text-gray-500 text-xs">
+  Original
+</div>
               </div>
             </div>
           ))}
@@ -984,9 +991,9 @@ if (data.success) {
                     <div className="text-gray-500 text-xs">
                       Outstanding
                     </div>
-                    <div className="text-gray-900 font-bold text-xl">
-                      ${Number(outstandingAmount || 0).toFixed(2)}
-                    </div>
+<div className="text-gray-900 font-bold text-xl">
+  ${Math.max(0, Number(outstandingAmount || 0) - Number(directSalesCredit || 0)).toFixed(2)}
+</div>
                   </div>
                 </div>
 
