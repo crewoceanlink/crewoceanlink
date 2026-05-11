@@ -280,6 +280,12 @@ const loadPartnerDashboardData = async () => {
 
 useEffect(() => {
   loadPartnerDashboardData();
+
+  const interval = setInterval(() => {
+    loadPartnerDashboardData();
+  }, 15000);
+
+  return () => clearInterval(interval);
 }, []);
 
   return (
