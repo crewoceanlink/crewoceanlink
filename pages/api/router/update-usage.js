@@ -102,20 +102,6 @@ export default async function handler(req, res) {
       });
     }
 
-    const { error: updateVoucherError } = await supabase
-      .from("crew_vouchers")
-      .update({
-        traffic_last_bytes: bytesOut,
-      })
-      .eq("voucher_code", voucherCode);
-
-    if (updateVoucherError) {
-      return res.status(500).json({
-        error: "Failed to update voucher traffic checkpoint",
-        details: updateVoucherError.message,
-      });
-    }
-
     return res.status(200).json({
       ok: true,
       voucherCode,
