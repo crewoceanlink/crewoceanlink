@@ -58,7 +58,7 @@ const getPartnerNetProfitForVouchers = (vouchers, ship) => {
     revenue - operatingCostUSD - proportionalHardwareCostUSD;
 
   if (model === "M1") return totalProfit * 0.5;
-  if (model === "M2") return totalProfit * 0.7;
+  if (model === "M2") return totalProfit * 0.3;
 
   return totalProfit;
 };
