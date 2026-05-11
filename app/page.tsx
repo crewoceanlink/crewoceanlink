@@ -2561,13 +2561,9 @@ return (
                   {usagePercent}%
                 </div>
 
-                <div className="col-span-1 text-gray-700 font-semibold">
-                  ${Number(voucher.crew_price_usd || 0).toFixed(2)}
-                </div>
-
-                <div className="col-span-1 text-gray-700 font-semibold">
-                  ${Number(voucher.your_revenue_usd || 0).toFixed(2)}
-                </div>
+<div className="col-span-2 text-gray-700 font-semibold">
+  ${Number(voucher.crew_price_usd || 0).toFixed(2)}
+</div>
 
                 <div className="col-span-2 text-right">
                   <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
@@ -2592,48 +2588,6 @@ return (
   </div>
 </div>
 
-{/* Divider */}
-<div className="my-6 border-t border-white/20"></div>
-
-<div className="mt-6">
-
-  <div className="
-    rounded-xl 
-    bg-white/[0.8] 
-    backdrop-blur-lg
-    border border-white/20
-    p-4
-  ">
-
-    <div className="text-gray-500 text-sm mb-1">
-      Ship Ranking
-    </div>
-
-    <div className="space-y-2">
-
-      <div className="flex justify-between items-center">
-        <span className="text-gray-500 text-sm">
-          #1 MSC MICHELA | M1 | Global Priority Mini
-        </span>
-        <span className="text-gray-500 text-sm mb-1 font-medium">
-          $0
-        </span>
-      </div>
-
-      <div className="flex justify-between items-center">
-        <span className="text-gray-500 text-sm">
-          #1 MSC MICHELA | M1 | Global Priority Mini
-        </span>
-        <span className="text-gray-500 text-sm mb-1 font-medium">
-          $0
-        </span>
-      </div>
-
-    </div>
-
-  </div>
-
-</div>
    </div>
 </div>
 
