@@ -14,6 +14,7 @@ const [ships, setShips] = useState([]);
 const [securityChecks, setSecurityChecks] = useState([]);
 const [partnerOrders, setPartnerOrders] = useState([]);
 const [partnerOrdersFilter, setPartnerOrdersFilter] = useState("pending");
+const [directSales, setDirectSales] = useState([]);
 const [selectedShipIndex, setSelectedShipIndex] = useState(() => {
   if (typeof window === "undefined") return 0;
 
@@ -1603,6 +1604,23 @@ const loadPartnerOrders = async () => {
   setPartnerOrders(ordersWithVouchers);
 };
 
+const loadDirectSales = async () => {
+  const { data, error } = await supabase
+    .from("crew_vouchers")
+    .select("id, ship_id, voucher_code, voucher_type, gb_total, gb_used, status, assigned_to, crew_price_usd, your_revenue_usd, created_at, assigned_at, partner_order_id, created_by")
+    .is("partner_order_id", null)
+    .not("assigned_to", "is", null)
+    .neq("assigned_to", "")
+    .order("assigned_at", { ascending: false });
+
+  if (error) {
+    console.error("DIRECT SALES LOAD ERROR:", error);
+    return;
+  }
+
+  setDirectSales(data || []);
+};
+
 const markPartnerOrderPaid = async (orderId) => {
   const confirmPaid = confirm(
     "Confirm payment received?\n\nThis will mark the partner order as paid."
@@ -1686,6 +1704,7 @@ useEffect(() => {
   loadVouchers();
   loadSecurityChecks();
   loadPartnerOrders();
+  loadDirectSales();
 }, [timeFilter]);
 
 useEffect(() => {
@@ -1693,6 +1712,7 @@ useEffect(() => {
     loadShips();
     loadSecurityChecks();
     loadPartnerOrders();
+    loadDirectSales();
   }, 30000);
 
   return () => clearInterval(interval);
@@ -1723,6 +1743,11 @@ const visiblePartnerOrders = partnerOrders.filter((order) => {
   }
 
   return true;
+});
+
+const visibleDirectSales = directSales.filter((voucher) => {
+  if (!selectedShip) return false;
+  return String(voucher.ship_id) === String(selectedShip.id);
 });
 
 const selectedSecurity = selectedShip
@@ -2465,6 +2490,100 @@ return (
                   })}
                 </div>
               )}
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
+
+{/* Divider */}
+<div className="my-6 border-t border-white/20"></div>
+
+{/* Direct Sales */}
+<div className="mt-6">
+  <div className="rounded-xl bg-white/[0.8] backdrop-blur-lg border border-white/20 p-4">
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <div className="text-gray-700 text-sm font-semibold">
+          Direct Sales {selectedShip ? `(${selectedShip.name})` : ""}
+        </div>
+        <div className="text-gray-500 text-xs mt-1">
+          Admin / direct crew voucher sales for the selected ship.
+        </div>
+      </div>
+    </div>
+
+    {visibleDirectSales.length === 0 ? (
+      <div className="text-gray-500 text-sm">
+        No direct sales for this ship.
+      </div>
+    ) : (
+      <div className="space-y-2">
+        {visibleDirectSales.map((voucher) => {
+          const totalGb = Number(voucher.gb_total || 0);
+          const usedGb = Number(voucher.gb_used || 0);
+          const displayUsedGb = Math.min(usedGb, totalGb);
+          const usagePercent =
+            totalGb > 0 ? Math.min(100, Math.round((displayUsedGb / totalGb) * 100)) : 0;
+
+          return (
+            <div
+              key={voucher.id}
+              className="rounded-xl bg-white/70 border border-white/30 px-4 py-3 text-sm"
+            >
+              <div className="grid grid-cols-12 gap-3 items-center">
+                <div className="col-span-2 text-gray-700 font-medium">
+                  {voucher.assigned_to || "—"}
+                </div>
+
+                <div className="col-span-2 text-gray-700 font-mono font-semibold">
+                  <a
+                    href={`/crew/dashboard?voucherCode=${encodeURIComponent(voucher.voucher_code)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {voucher.voucher_code}
+                  </a>
+                </div>
+
+                <div className="col-span-1 text-gray-600">
+                  {voucher.voucher_type}
+                </div>
+
+                <div className="col-span-2 text-gray-600">
+                  {displayUsedGb.toFixed(2)} / {totalGb} GB
+                </div>
+
+                <div className="col-span-1 text-gray-700 font-semibold">
+                  {usagePercent}%
+                </div>
+
+                <div className="col-span-1 text-gray-700 font-semibold">
+                  ${Number(voucher.crew_price_usd || 0).toFixed(2)}
+                </div>
+
+                <div className="col-span-1 text-gray-700 font-semibold">
+                  ${Number(voucher.your_revenue_usd || 0).toFixed(2)}
+                </div>
+
+                <div className="col-span-2 text-right">
+                  <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
+                    {voucher.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500"
+                    style={{ width: `${usagePercent}%` }}
+                  />
+                </div>
+              </div>
             </div>
           );
         })}
