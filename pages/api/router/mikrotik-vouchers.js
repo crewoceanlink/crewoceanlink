@@ -25,11 +25,17 @@ export default async function handler(req, res) {
     "# slow mode uses hotspot profile rate-limit",
   ];
 
+  const validCodes = [];
+
   for (const voucher of data || []) {
     const code = String(voucher.voucher_code || "").trim().toUpperCase();
     const status = String(voucher.status || "").trim().toLowerCase();
 
     if (!code) continue;
+
+    if (status === "active" || status === "unused") {
+      validCodes.push(code);
+    }
 
     const gbUsed = Number(voucher.gb_used || 0);
     const gbTotal = Number(voucher.gb_total || 0);
@@ -80,6 +86,26 @@ export default async function handler(req, res) {
       );
     }
   }
+
+  lines.push("# Disable stale CrewOceanLink voucher users not present in current Supabase sync");
+  lines.push(`:foreach u in=[/ip hotspot user find where comment="CrewOceanLink auto"] do={`);
+  lines.push(`  :local n [/ip hotspot user get $u name];`);
+
+  if (validCodes.length > 0) {
+    const condition = validCodes.map((code) => `($n != "${code}")`).join(" && ");
+
+    lines.push(`  :if (${condition}) do={`);
+    lines.push(`    :do { /ip hotspot active remove [find user=$n] } on-error={}`);
+    lines.push(`    :do { /ip hotspot cookie remove [find user=$n] } on-error={}`);
+    lines.push(`    :do { /ip hotspot user disable $u } on-error={}`);
+    lines.push(`  }`);
+  } else {
+    lines.push(`  :do { /ip hotspot active remove [find user=$n] } on-error={}`);
+    lines.push(`  :do { /ip hotspot cookie remove [find user=$n] } on-error={}`);
+    lines.push(`  :do { /ip hotspot user disable $u } on-error={}`);
+  }
+
+  lines.push(`}`);
 
   res.setHeader("Content-Type", "text/plain");
   return res.status(200).send(lines.join("\n"));
