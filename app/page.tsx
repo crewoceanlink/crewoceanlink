@@ -2425,7 +2425,7 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
             >
               <div className="grid grid-cols-12 gap-3 items-center">
 <div className="col-span-2 text-gray-700 font-medium">
-  {voucher.assigned_to || "Not assigned"}
+  {order.partner_name}
 </div>
 
                 <div className="col-span-3 text-gray-600">
