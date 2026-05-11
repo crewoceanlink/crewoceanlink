@@ -7,6 +7,26 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function getDirectSaleCreditForVoucher(voucher: any, priceRules: any[]) {
+  const model = String(voucher.revenue_share_model || "").toUpperCase();
+
+  if (model === "M3") return 0;
+
+  const rule = priceRules.find((rule) => {
+    return (
+      String(rule.plan_type || "").toLowerCase() === String(voucher.plan_type || "").toLowerCase() &&
+      String(rule.commission_model || "").toUpperCase() === model &&
+      String(rule.voucher_type || "").toUpperCase() === String(voucher.voucher_type || "").toUpperCase()
+    );
+  });
+
+  const crewPrice = Number(voucher.crew_price_usd || rule?.crew_price_usd || 0);
+  const partnerPrice = Number(rule?.partner_price_usd || 0);
+  const credit = crewPrice - partnerPrice;
+
+  return credit > 0 ? credit : 0;
+}
+
 async function sendTelegramAlert(message: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -75,11 +95,52 @@ export async function GET(request: Request) {
       0
     );
 
+    const { data: partnerForCredit } = await supabase
+      .from("partners")
+      .select("*")
+      .eq("id", partnerId)
+      .eq("active", true)
+      .single();
+
+    let directSalesCredit = 0;
+
+    if (partnerForCredit?.ship_id) {
+      const { data: directSaleVouchers, error: directSaleError } = await supabase
+        .from("crew_vouchers")
+        .select("id, ship_id, voucher_type, plan_type, crew_price_usd, revenue_share_model, partner_order_id, created_by, direct_credit_settled_order_id")
+        .eq("ship_id", partnerForCredit.ship_id)
+        .eq("created_by", "admin")
+        .is("partner_order_id", null)
+        .is("direct_credit_settled_order_id", null);
+
+      if (directSaleError) {
+        console.error("DIRECT SALES CREDIT LOAD ERROR:", directSaleError);
+      }
+
+      const { data: priceRules, error: priceRulesError } = await supabase
+        .from("voucher_price_rules")
+        .select("*")
+        .eq("active", true);
+
+      if (priceRulesError) {
+        console.error("DIRECT SALES CREDIT PRICE RULES ERROR:", priceRulesError);
+      }
+
+      directSalesCredit = Number(
+        (directSaleVouchers || [])
+          .reduce((sum, voucher) => {
+            return sum + getDirectSaleCreditForVoucher(voucher, priceRules || []);
+          }, 0)
+          .toFixed(2)
+      );
+    }
+
     if (orderError || !lastOrder) {
       return NextResponse.json({
         success: true,
         last_order: null,
         outstanding_amount: outstandingAmount,
+        direct_sales_credit: directSalesCredit,
       });
     }
 
@@ -87,6 +148,7 @@ export async function GET(request: Request) {
       success: true,
       last_order: lastOrder,
       outstanding_amount: outstandingAmount,
+      direct_sales_credit: directSalesCredit,
     });
   } catch (err) {
     console.error("PARTNER LAST ORDER ERROR:", err);
@@ -160,6 +222,40 @@ export async function POST(req: Request) {
         ? "Global Priority 500"
         : "Global Priority 50";
 
+    const { data: directSaleVouchers, error: directSaleError } = await supabase
+      .from("crew_vouchers")
+      .select("id, ship_id, voucher_type, plan_type, crew_price_usd, revenue_share_model, partner_order_id, created_by, direct_credit_settled_order_id")
+      .eq("ship_id", ship.id)
+      .eq("created_by", "admin")
+      .is("partner_order_id", null)
+      .is("direct_credit_settled_order_id", null);
+
+    if (directSaleError) {
+      console.error("DIRECT SALES CREDIT LOAD ERROR:", directSaleError);
+    }
+
+    const { data: priceRules, error: priceRulesError } = await supabase
+      .from("voucher_price_rules")
+      .select("*")
+      .eq("active", true);
+
+    if (priceRulesError) {
+      console.error("DIRECT SALES CREDIT PRICE RULES ERROR:", priceRulesError);
+    }
+
+    const directSalesCredit = Number(
+      (directSaleVouchers || [])
+        .reduce((sum, voucher) => {
+          return sum + getDirectSaleCreditForVoucher(voucher, priceRules || []);
+        }, 0)
+        .toFixed(2)
+    );
+
+    const payableAmount = Math.max(
+      0,
+      Number((Number(total_amount || 0) - directSalesCredit).toFixed(2))
+    );
+
     const { data: order, error: orderError } = await supabase
       .from("partner_orders")
       .insert({
@@ -172,7 +268,9 @@ export async function POST(req: Request) {
         partner_id: partner.id,
 
         order_data: items,
-        total_amount,
+        total_amount: payableAmount,
+        credit_applied_usd: directSalesCredit,
+        original_total_amount: total_amount,
       })
       .select()
       .single();
@@ -183,6 +281,21 @@ export async function POST(req: Request) {
         { success: false, message: "Order insert failed" },
         { status: 500 }
       );
+    }
+
+    if (directSalesCredit > 0 && directSaleVouchers && directSaleVouchers.length > 0) {
+      const directSaleVoucherIds = directSaleVouchers.map((voucher) => voucher.id);
+
+      const { error: settleCreditError } = await supabase
+        .from("crew_vouchers")
+        .update({
+          direct_credit_settled_order_id: order.id,
+        })
+        .in("id", directSaleVoucherIds);
+
+      if (settleCreditError) {
+        console.error("DIRECT SALES CREDIT SETTLE ERROR:", settleCreditError);
+      }
     }
 
     const itemsToInsert = items.map((item: any) => ({
@@ -220,7 +333,9 @@ Partner: ${partner.name}
 Order:
 ${orderLines}
 
-Total: $${total_amount}
+Original Total: $${Number(total_amount || 0).toFixed(2)}
+Direct Sales Credit: -$${directSalesCredit.toFixed(2)}
+Total Payable: $${payableAmount.toFixed(2)}
 
 Status: Payment pending`
     );
@@ -228,6 +343,9 @@ Status: Payment pending`
     return NextResponse.json({
       success: true,
       order_id: order.id,
+      original_total_amount: Number(total_amount || 0),
+      direct_sales_credit: directSalesCredit,
+      payable_amount: payableAmount,
     });
   } catch (err) {
     console.error(err);

@@ -106,6 +106,7 @@ export default function PartnerDashboardPage() {
 const [realVouchers, setRealVouchers] = useState([]);
 const [lastOrder, setLastOrder] = useState(null);
 const [outstandingAmount, setOutstandingAmount] = useState(0);
+const [directSalesCredit, setDirectSalesCredit] = useState(0);
 const [priceRules, setPriceRules] = useState([]);
 const [partner, setPartner] = useState(null);
 const [ship, setShip] = useState(null);
@@ -312,6 +313,7 @@ const loadPartnerDashboardData = async () => {
       if (data.success) {
         setLastOrder(data.last_order);
         setOutstandingAmount(Number(data.outstanding_amount || 0));
+setDirectSalesCredit(Number(data.direct_sales_credit || 0));
       }
     } catch (err) {
       console.error("LOAD LAST ORDER ERROR:", err);
@@ -751,14 +753,20 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                   <span className="text-gray-800 font-medium">
                     Total payable to CrewOceanLink
                   </span>
-                  <span className="text-gray-900 font-bold text-2xl">
-                    ${Number(total || 0).toFixed(2)}
-                  </span>
+<span className="text-gray-900 font-bold text-2xl">
+  ${Math.max(0, Number(total || 0) - Number(directSalesCredit || 0)).toFixed(2)}
+</span>
                 </div>
 
-                <div className="text-gray-600 text-sm mt-2">
-                  Payment methods: Ship MoneyCard or Revolut
-                </div>
+<div className="text-gray-600 text-sm mt-2">
+  Payment methods: Ship MoneyCard or Revolut
+</div>
+
+{directSalesCredit > 0 && (
+  <div className="text-green-700 text-xs mt-1 font-semibold">
+    Direct sales credit applied: -${Number(directSalesCredit || 0).toFixed(2)}
+  </div>
+)}
               </div>
 
               <button
@@ -851,6 +859,22 @@ if (data.success) {
         : "PAYMENT PENDING"}
     </div>
   </div>
+
+  {directSalesCredit > 0 && (
+    <div className="mt-4 rounded-xl bg-green-50 border border-green-100 p-3">
+      <div className="text-green-700 text-xs font-bold uppercase">
+        Direct Sales Credit
+      </div>
+
+      <div className="mt-1 text-green-900 font-bold text-xl">
+        ${Number(directSalesCredit || 0).toFixed(2)}
+      </div>
+
+      <div className="text-green-800/80 text-xs mt-1">
+        Credit from direct crew sales handled by CrewOceanLink. This amount will be deducted from your next voucher order.
+      </div>
+    </div>
+  )}
 
   {lastOrder && Array.isArray(lastOrder.order_data) ? (
     <>
