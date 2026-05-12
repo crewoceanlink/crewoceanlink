@@ -108,15 +108,10 @@ if (starlinkError) throw starlinkError
 
 let starlinkBytes = 0
 
-for (let i = 1; i < (starlinkRows || []).length; i++) {
-  const prev = Number(starlinkRows[i - 1].bytes_total || 0)
-  const curr = Number(starlinkRows[i].bytes_total || 0)
-
-  if (curr >= prev) {
-    starlinkBytes += curr - prev
-  } else {
-    starlinkBytes += curr
-  }
+if (starlinkRows && starlinkRows.length > 0) {
+  starlinkBytes = Math.max(
+    ...starlinkRows.map((row) => Number(row.bytes_total || 0))
+  )
 }
 
 const starlinkGB = starlinkBytes / 1024 / 1024 / 1024
