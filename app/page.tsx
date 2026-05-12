@@ -1377,10 +1377,7 @@ const firstVoucherStart = vouchersData
   .filter((v) => v.ship_id === ship.id)
   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]?.created_at;
 
-const starlinkEntries = shipStarlinkAll.filter((u) => {
-  if (!firstVoucherStart) return true;
-  return new Date(u.timestamp) >= new Date(firstVoucherStart);
-});
+const starlinkEntries = shipStarlinkAll;
 
 let starlinkBytes = 0;
 
@@ -2212,7 +2209,9 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
 <div className="flex flex-col text-[12px] text-gray-500 leading-tight w-[130px] shrink-0 -ml-4">
       <div className="flex justify-between w-30">
         <span>Starlink</span>
-        <span className="text-gray-500">{Number(selectedShip.starlinkGB || 0).toFixed(2)} GB</span>
+        <span className="text-gray-500">
+  {Number(selectedSecurity?.starlink_gb || selectedShip.starlinkGB || 0).toFixed(2)} GB
+</span>
       </div>
       <div className="flex justify-between w-30">
         <span>Router</span>
