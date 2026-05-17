@@ -14,23 +14,23 @@ const voucherTypes = [
 const dashboardResources = [
   {
     title: "Crew Guide",
-    file: "/resources/guides/crew-internet-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/crew-internet-guide.png",
   },
   {
     title: "Partner Guide",
-    file: "/resources/guides/crew-partner-dashboard-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/crew-partner-dashboard-guide.png",
   },
   {
     title: "System Setup",
-    file: "/resources/guides/system-setup-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/system-setup-guide.png",
   },
   {
     title: "Dish Mount",
-    file: "/resources/guides/satellite-dish-mount-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/satellite-dish-mount-guide.png",
   },
   {
     title: "Captive Login",
-    file: "/resources/guides/captive-login-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/captive-login-guide.png",
   },
 ];
 

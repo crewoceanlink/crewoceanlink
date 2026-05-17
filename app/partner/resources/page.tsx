@@ -9,52 +9,52 @@ const resources = [
   {
     title: "Crew Partner Guide",
     description: "How to sell, assign and manage vouchers onboard.",
-    file: "/resources/guides/crew-partner-dashboard-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/crew-partner-dashboard-guide.png",
   },
   {
     title: "System Setup Guide",
     description: "Plug & play onboard system setup.",
-    file: "/resources/guides/system-setup-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/system-setup-guide.png",
   },
   {
     title: "Dish Mount Guide",
     description: "Satellite dish railing mount and cable routing.",
-    file: "/resources/guides/satellite-dish-mount-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/satellite-dish-mount-guide.png",
   },
   {
     title: "Captive Login Guide",
     description: "How crew members connect with voucher access.",
-    file: "/resources/guides/captive-login-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/captive-login-guide.png",
   },
   {
     title: "Crew Partner Application",
     description: "Overview for becoming a CrewOceanLink partner.",
-    file: "/resources/marketing/crew-partner-application-guide.jpeg",
+    file: "https://crewoceanlink.com/resources/marketing/crew-partner-application-guide.jpeg",
   },
   {
     title: "How CrewOceanLink Works",
     description: "Simple overview of the onboard internet system.",
-    file: "/resources/marketing/how-crewoceanlink-works.jpeg",
+    file: "https://crewoceanlink.com/resources/marketing/how-crewoceanlink-works.jpeg",
   },
   {
     title: "Plug & Play System",
     description: "Fast maritime deployment overview.",
-    file: "/resources/marketing/plug-and-play-system.png",
+    file: "https://crewoceanlink.com/resources/marketing/plug-and-play-system.png",
   },
   {
     title: "Crew Partner Earnings",
     description: "Realistic earning opportunity overview.",
-    file: "/resources/pricing/crew-partner-earnings.jpeg",
+    file: "https://crewoceanlink.com/resources/pricing/crew-partner-earnings.jpeg",
   },
   {
     title: "Small Crew Pricing",
     description: "Voucher pricing for small crews.",
-    file: "/resources/pricing/small-crew-package-pricing.jpeg",
+    file: "https://crewoceanlink.com/resources/pricing/small-crew-package-pricing.jpeg",
   },
   {
     title: "Large Crew Pricing",
     description: "Voucher pricing for large crews.",
-    file: "/resources/pricing/large-crew-package-pricing.jpeg",
+    file: "https://crewoceanlink.com/resources/pricing/large-crew-package-pricing.jpeg",
   },
 ];
 
