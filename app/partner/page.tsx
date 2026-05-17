@@ -728,9 +728,13 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                         </div>
                         <div className="h-2 rounded-full bg-gray-300 overflow-hidden">
                           <div
-                            className={`h-full ${
-                              isNearLimit ? "bg-amber-500" : "bg-green-500"
-                            }`}
+className={`h-full ${
+  String(voucher.status || "").toLowerCase() === "exhausted"
+    ? "bg-red-500"
+    : isNearLimit
+      ? "bg-amber-500"
+      : "bg-green-500"
+}`}
                             style={{ width: `${percent}%` }}
                           />
                         </div>

@@ -2676,7 +2676,11 @@ return (
               <div className="mt-3">
                 <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-green-500"
+                    className={`h-full ${
+  String(voucher.status || "").toLowerCase() === "exhausted"
+    ? "bg-red-500"
+    : "bg-green-500"
+}`}
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
