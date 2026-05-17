@@ -11,7 +11,30 @@ const voucherTypes = [
   { size: "50GB" },
 ];
 
-const USD_PER_EUR = 1 / 0.85;
+const dashboardResources = [
+  {
+    title: "Crew Guide",
+    file: "/resources/guides/crew-internet-guide.png",
+  },
+  {
+    title: "Partner Guide",
+    file: "/resources/guides/crew-partner-dashboard-guide.png",
+  },
+  {
+    title: "System Setup",
+    file: "/resources/guides/system-setup-guide.png",
+  },
+  {
+    title: "Dish Mount",
+    file: "/resources/guides/satellite-dish-mount-guide.png",
+  },
+  {
+    title: "Captive Login",
+    file: "/resources/guides/captive-login-guide.png",
+  },
+];
+
+const DEFAULT_USD_PER_EUR = 1 / 0.85;
 
 const getVoucherGb = (voucher) => {
   const type = String(voucher.voucher_type || "").toUpperCase();
@@ -25,7 +48,7 @@ const getVoucherGb = (voucher) => {
   return Number(voucher.gb_total || 0);
 };
 
-const getPartnerNetProfitForVouchers = (vouchers, ship) => {
+const getPartnerNetProfitForVouchers = (vouchers, ship, usdPerEur) => {
   if (!ship || !Array.isArray(vouchers) || vouchers.length === 0) return 0;
 
   const model = String(ship.model || "").toUpperCase();
@@ -44,15 +67,66 @@ const getPartnerNetProfitForVouchers = (vouchers, ship) => {
   const planPriceEUR = Number(ship.plan_price_eur || 0);
   const hardwareEUR = Number(ship.hardware_eur || 0);
 
-  const operatingCostUSD =
-    planGB > 0 ? (planPriceEUR * USD_PER_EUR / planGB) * soldGB : 0;
+let remainingGB = soldGB;
+let operatingCostUSD = 0;
 
-  const cycleCount = planGB >= 500 ? planGB / 500 : planGB / 50;
-  const hardwareDepreciationUSD =
-    model === "M1" ? 0 : ((hardwareEUR / 24) * cycleCount) * USD_PER_EUR;
+const subscriptionCostUSD =
+  Number(planPriceEUR || 0) * usdPerEur;
 
-  const proportionalHardwareCostUSD =
-    planGB > 0 ? hardwareDepreciationUSD * (soldGB / planGB) : 0;
+const subscriptionCostPerGB =
+  planGB > 0 ? subscriptionCostUSD / planGB : 0;
+
+const subscriptionUsedGB = Math.min(
+  remainingGB,
+  planGB
+);
+
+operatingCostUSD +=
+  subscriptionUsedGB * subscriptionCostPerGB;
+
+remainingGB -= subscriptionUsedGB;
+
+const sortedAddons = [...(ship.addons || [])].sort((a, b) => {
+  return (
+    new Date(a.created_at).getTime() -
+    new Date(b.created_at).getTime()
+  );
+});
+
+for (const addon of sortedAddons) {
+  if (remainingGB <= 0) break;
+
+  const addonGB = Number(addon.gb || 0);
+
+  const addonCostUSD =
+    Number(addon.price_eur || 0) * usdPerEur;
+
+  const addonCostPerGB =
+    addonGB > 0 ? addonCostUSD / addonGB : 0;
+
+  const addonUsedGB = Math.min(
+    remainingGB,
+    addonGB
+  );
+
+  operatingCostUSD +=
+    addonUsedGB * addonCostPerGB;
+
+  remainingGB -= addonUsedGB;
+}
+
+const cycleCount = planGB >= 500 ? planGB / 500 : planGB / 50;
+
+const hardwareDepreciationUSD =
+  model === "M1" || !usdPerEur
+    ? 0
+    : ((hardwareEUR / 24) * cycleCount) * usdPerEur;
+
+const proportionalHardwareCostUSD =
+  planGB > 0
+    ? hardwareDepreciationUSD *
+      (Math.min(soldGB, planGB) / planGB)
+    : 0;
 
   const totalProfit =
     revenue - operatingCostUSD - proportionalHardwareCostUSD;
@@ -115,6 +189,23 @@ const [currentCycle, setCurrentCycle] = useState({
   end: null,
 });
 
+const [usdPerEur, setUsdPerEur] = useState(DEFAULT_USD_PER_EUR);
+
+useEffect(() => {
+  fetch("https://open.er-api.com/v6/latest/USD")
+    .then((res) => res.json())
+    .then((data) => {
+      const eur = Number(data?.rates?.EUR);
+
+      if (!isNaN(eur) && eur > 0) {
+        setUsdPerEur(1 / eur);
+      }
+    })
+    .catch((err) => {
+      console.error("PARTNER FX LOAD ERROR:", err);
+    });
+}, []);
+
 // 🔹 AVAILABLE = noch nicht verkauft (kein assigned_to)
 const availableVouchers = realVouchers.filter(
   (v) => !v.assigned_to || v.assigned_to === ""
@@ -163,7 +254,7 @@ const todayRevenue = todaySoldVouchers.reduce(
   0
 );
 
-const todayProfit = getPartnerNetProfitForVouchers(todaySoldVouchers, ship);
+const todayProfit = getPartnerNetProfitForVouchers(todaySoldVouchers, ship, usdPerEur);
 
 const cycleSoldVouchers = realVouchers.filter((v) => {
   if (!v.assigned_to) return false;
@@ -185,7 +276,7 @@ const cycleRevenue = cycleSoldVouchers.reduce(
   0
 );
 
-const cycleProfit = getPartnerNetProfitForVouchers(cycleSoldVouchers, ship);
+const cycleProfit = getPartnerNetProfitForVouchers(cycleSoldVouchers, ship, usdPerEur);
 
 const total = useMemo(() => {
   return voucherTypes.reduce((sum, item) => {
@@ -284,6 +375,7 @@ const loadPartnerDashboardData = async () => {
         setRealVouchers(data.vouchers || []);
         setPriceRules(data.price_rules || []);
         setPartner(data.partner || null);
+        console.log("PARTNER SHIP DATA:", data.ship);
         setShip(data.ship || null);
 
         setCurrentCycle({
@@ -1118,7 +1210,49 @@ if (data.success) {
             </div>
           </div>
 
+                    <div className="mt-5 rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-white text-sm font-medium">
+                  Resources & Guides
+                </div>
+
+                <div className="text-white/70 text-xs mt-0.5">
+                  Helpful setup guides and onboard instructions.
+                </div>
+              </div>
+
+              <a
+                href="/partner/resources"
+                className="text-white/90 hover:text-white text-xs sm:text-sm font-medium shrink-0"
+              >
+                View all →
+              </a>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {dashboardResources.map((resource) => (
+                <a
+                  key={resource.title}
+                  href={resource.file}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 px-3 py-2.5 transition"
+                >
+                  <div className="text-white text-xs sm:text-sm font-medium">
+                    {resource.title}
+                  </div>
+
+                  <div className="text-white/55 text-[11px] mt-0.5">
+                    Open guide
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+
           <div className="pt-2 shrink-0">
+          
 <div className="rounded-2xl bg-white/[0.06] border border-white/15 px-4 py-2 sm:py-2.5 flex items-center justify-between gap-4">
   <div>
     <div className="text-white text-sm">Partner sales access</div>

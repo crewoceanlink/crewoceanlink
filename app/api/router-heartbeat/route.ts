@@ -10,8 +10,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const secret = body.secret;
-    const shipId = body.shipId;
+const secret = body.secret;
+const shipId = body.shipId;
+const apOnlineCount = Number(body.apOnlineCount || 0);
 
     if (secret !== process.env.ROUTER_HEARTBEAT_SECRET) {
       return NextResponse.json(
@@ -28,8 +29,10 @@ export async function POST(req: Request) {
         router_online: true,
         starlink_online: true,
         last_seen_router: now,
-        last_seen_starlink: now,
-        checked_at: now,
+last_seen_starlink: now,
+ap_online_count: apOnlineCount,
+last_seen_ap: now,
+checked_at: now,
       })
       .eq("ship_id", shipId);
 

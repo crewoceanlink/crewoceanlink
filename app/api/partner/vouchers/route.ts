@@ -73,6 +73,12 @@ export async function GET(request: Request) {
       .select("*")
       .eq("ship_id", ship.id);
 
+const { data: addons } = await supabase
+  .from("addons")
+  .select("*")
+  .eq("ship_id", ship.id)
+  .order("created_at", { ascending: true });
+
     const { data: priceRules, error: priceRulesError } = await supabase
       .from("voucher_price_rules")
       .select("*")
@@ -103,7 +109,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       partner,
-      ship,
+      ship: {
+  ...ship,
+  addons: addons || [],
+},
       vouchers: vouchers || [],
       price_rules: priceRules || [],
       cycle_start: currentCycle?.start_date || null,

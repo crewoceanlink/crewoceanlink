@@ -972,10 +972,10 @@ const getNetProfitUSD = (ship) => {
   const hardwareDepreciation =
     ship.model === "M1" ? 0 : getHardwareDepreciationUSD(ship);
 
-  const availableGB = getSubscriptionAndAddonGB(ship);
+const basePlanGB = Number(ship.plan?.gb || 0);
 
-  const proportionalHardwareCost =
-    availableGB > 0 ? hardwareDepreciation * (soldGB / availableGB) : 0;
+const proportionalHardwareCost =
+  basePlanGB > 0 ? hardwareDepreciation * (Math.min(soldGB, basePlanGB) / basePlanGB) : 0;
 
   const totalProfit =
     revenue - operatingCost - proportionalHardwareCost;
@@ -1377,22 +1377,44 @@ const firstVoucherStart = vouchersData
   .filter((v) => v.ship_id === ship.id)
   .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]?.created_at;
 
-const starlinkEntries = shipStarlinkAll;
+const starlinkEntries = shipStarlinkAll.filter((u) => {
+  const ts = new Date(u.timestamp || u.created_at);
+
+  return relevantSubs.some((sub) => {
+    const cycleEnd = new Date(sub.end);
+    cycleEnd.setHours(23, 59, 59, 999);
+
+    return ts >= sub.start && ts <= cycleEnd;
+  });
+});
+
+const uniqueStarlinkEntries = Array.from(
+  new Map(
+    starlinkEntries.map((e) => [
+      `${e.timestamp}-${e.bytes_total}`,
+      e,
+    ])
+  ).values()
+);
+
+const sortedStarlinkEntries = uniqueStarlinkEntries
+  .filter((e) => e?.bytes_total !== null && e?.bytes_total !== undefined)
+  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
 let starlinkBytes = 0;
 
-for (let i = 1; i < starlinkEntries.length; i++) {
-  const prev = Number(starlinkEntries[i - 1].bytes_total || 0);
-  const curr = Number(starlinkEntries[i].bytes_total || 0);
+for (let i = 1; i < sortedStarlinkEntries.length; i++) {
+  const prev = Number(sortedStarlinkEntries[i - 1].bytes_total || 0);
+  const curr = Number(sortedStarlinkEntries[i].bytes_total || 0);
 
-  if (curr >= prev) {
+  if (!isNaN(prev) && !isNaN(curr) && curr >= prev) {
     starlinkBytes += curr - prev;
-  } else {
-    starlinkBytes += curr;
   }
 }
 
-const starlinkGB = Number((starlinkBytes / (1024 * 1024 * 1024)).toFixed(2));
+const starlinkGB = Number(
+  (starlinkBytes / (1024 * 1024 * 1024)).toFixed(2)
+);
 
 console.log("STARLINK CHECK:", {
   ship: ship.name,
@@ -1472,11 +1494,17 @@ const latestStatus = Array.isArray(routerStatusData)
   : null;
 
 const lastSeenRouter = latestStatus?.last_seen_router || null;
+
 const lastSeenStarlink = latestStatus?.last_seen_starlink || null;
+
+const apOnlineCount = Number(latestStatus?.ap_online_count || 0);
 
 const routerOnline = isFreshStatus(lastSeenRouter);
 
 const starlinkOnline = isFreshStatus(lastSeenStarlink);
+
+const apOnline =
+  apOnlineCount >= 5;
 
 const shipPartner = (partnersData || []).find((partner) => {
   return String(partner.ship_id) === String(ship.id);
@@ -1535,7 +1563,9 @@ starlinkGB: starlinkGB,
 routerOnline,
 starlinkOnline,
 lastSeenRouter,
-lastSeenStarlink
+lastSeenStarlink,
+apOnlineCount,
+apOnline
     };
 });
     console.log("MAPPED:", mapped);
@@ -2089,63 +2119,99 @@ shadow-inner
     )}
   </div>
 
-  {/* STATUS */}
-  <div className="flex items-center justify-start gap-4 overflow-hidden whitespace-nowrap text-xs xl:text-sm pl-2">
+{selectedShip && (
+<div className="flex items-center justify-end gap-5 whitespace-nowrap pr-10">
 
-    {selectedShip && (
-      <>
-        <div className="flex items-center gap-1.5 shrink-0 text-white/85">
-          <span className={`inline-block w-2 h-2 rounded-full ${selectedShip.routerOnline ? "bg-green-400" : "bg-red-400"}`}></span>
-          <span>
-            Router: {selectedShip.routerOnline ? "Online" : "Offline"} · {formatLastSeen(selectedShip.lastSeenRouter)}
-          </span>
-        </div>
+{/* AP */}
+<div
+  className="flex items-center gap-1.5 shrink-0 text-white/85"
+>
+<span
+  className={`inline-block w-2 h-2 rounded-full ${
+    selectedShip.apOnline
+      ? "bg-green-400"
+      : selectedShip.apOnlineCount > 0
+        ? "bg-yellow-400"
+        : "bg-red-400"
+  }`}
+></span>
 
-        <div className="flex items-center gap-1.5 shrink-0 text-white/85">
-          <span className={`inline-block w-2 h-2 rounded-full ${selectedShip.starlinkOnline ? "bg-green-400" : "bg-red-400"}`}></span>
-          <span>
-            Starlink: {selectedShip.starlinkOnline ? "Online" : "Offline"} · {formatLastSeen(selectedShip.lastSeenStarlink)}
-          </span>
-        </div>
+<span>
+  AP Online {selectedShip.apOnlineCount}/5
+</span>
+</div>
 
-        <div
-title={
-  selectedSecurity
-    ? `Overall Status: ${securityStatus}
+  {/* Router */}
+  <div
+    title={`Last Check: ${formatLastSeen(selectedShip.lastSeenRouter)}`}
+    className="flex items-center gap-1.5 shrink-0 text-white/85 cursor-help"
+  >
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${
+        selectedShip.routerOnline ? "bg-green-400" : "bg-red-400"
+      }`}
+    ></span>
 
-Voucher Usage: ${selectedSecurity.voucher_gb} GB
-Router Usage: ${selectedSecurity.router_gb} GB
-Starlink Usage: ${selectedSecurity.starlink_gb || 0} GB
+    <span>
+      Router {selectedShip.routerOnline ? "Online" : "Offline"}
+    </span>
+  </div>
+
+  {/* Starlink */}
+  <div
+    title={`Last Check: ${formatLastSeen(selectedShip.lastSeenStarlink)}`}
+    className="flex items-center gap-1.5 shrink-0 text-white/85 cursor-help"
+  >
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${
+        selectedShip.starlinkOnline ? "bg-green-400" : "bg-red-400"
+      }`}
+    ></span>
+
+    <span>
+      Starlink {selectedShip.starlinkOnline ? "Online" : "Offline"}
+    </span>
+  </div>
+
+  {/* Security */}
+  <div
+    title={
+      selectedSecurity
+        ? `Overall Status: ${securityStatus}
+
+Voucher Usage: ${selectedShip.voucherUsedGB} GB
+Router Usage: ${selectedShip.usedGB} GB
+Starlink Usage: ${selectedShip.starlinkGB || 0} GB
 
 Deviation: ${selectedSecurity.deviation_percent}%
 Deviation Status: ${selectedSecurity.status}
 
 High Usage 5min: ${selectedSecurity.high_usage_gb_5min} GB
 High Usage Status: ${selectedSecurity.high_usage_status}`
-    : "Security check not loaded"
-}
-          className="flex items-center gap-1.5 shrink-0 text-white/85 cursor-help"
-        >
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${securityColor} ${
-              securityStatus === "RED" ? "animate-pulse scale-125" : ""
-            }`}
-          ></span>
-          <span>
-            Security: {securityLabel}
-            {selectedSecurity
-              ? selectedSecurity.high_usage_status === "RED"
-                ? ` · High Usage ${selectedSecurity.high_usage_gb_5min} GB`
-                : selectedSecurity.status === "RED" || selectedSecurity.status === "YELLOW"
-                  ? ` · Deviation ${selectedSecurity.deviation_percent}%`
-                  : ""
-              : ""}
-          </span>
-        </div>
-      </>
-    )}
+        : "Security check not loaded"
+    }
+    className="flex items-center gap-1.5 shrink-0 text-white/85 cursor-help"
+  >
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${securityColor} ${
+        securityStatus === "RED" ? "animate-pulse scale-125" : ""
+      }`}
+    ></span>
 
+    <span>
+      Security: {securityLabel}
+      {selectedSecurity
+        ? selectedSecurity.high_usage_status === "RED"
+          ? ` · High Usage ${selectedSecurity.high_usage_gb_5min} GB`
+          : selectedSecurity.status === "RED" || selectedSecurity.status === "YELLOW"
+            ? ` · Deviation ${selectedSecurity.deviation_percent}%`
+            : ""
+        : ""}
+    </span>
   </div>
+
+</div>
+)}
 
 </div>
 {selectedShip ? (
@@ -2210,7 +2276,7 @@ className={`font-semibold text-lg ${i === 2 || i === 8 ? "mt-1" : "mt-3"} ${
       <div className="flex justify-between w-30">
         <span>Starlink</span>
         <span className="text-gray-500">
-  {Number(selectedSecurity?.starlink_gb || selectedShip.starlinkGB || 0).toFixed(2)} GB
+  {Number(selectedShip.starlinkGB || 0).toFixed(2)} GB
 </span>
       </div>
       <div className="flex justify-between w-30">

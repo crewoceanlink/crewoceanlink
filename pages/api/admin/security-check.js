@@ -106,12 +106,23 @@ const { data: starlinkRows, error: starlinkError } = await supabase
 
 if (starlinkError) throw starlinkError
 
+const sortedStarlinkRows = (starlinkRows || [])
+  .filter((row) => row?.bytes_total !== null && row?.bytes_total !== undefined)
+  .sort(
+    (a, b) =>
+      new Date(a.timestamp).getTime() -
+      new Date(b.timestamp).getTime()
+  )
+
 let starlinkBytes = 0
 
-if (starlinkRows && starlinkRows.length > 0) {
-  starlinkBytes = Math.max(
-    ...starlinkRows.map((row) => Number(row.bytes_total || 0))
-  )
+for (let i = 1; i < sortedStarlinkRows.length; i++) {
+  const prev = Number(sortedStarlinkRows[i - 1].bytes_total || 0)
+  const curr = Number(sortedStarlinkRows[i].bytes_total || 0)
+
+  if (!isNaN(prev) && !isNaN(curr) && curr >= prev) {
+    starlinkBytes += curr - prev
+  }
 }
 
 const starlinkGB = starlinkBytes / 1024 / 1024 / 1024
@@ -148,13 +159,13 @@ const starlinkGB = starlinkBytes / 1024 / 1024 / 1024
         highUsageStatus = 'YELLOW'
       }
 
-      const absoluteDiff = Math.abs(routerGB - voucherGB)
+      const absoluteDiff = Math.abs(routerGB - starlinkGB)
 
       let deviationPercent = 0
       let status = 'GREEN'
 
       // 👉 Minimum Traffic Filter (wichtig!)
-      if (routerGB < 2) {
+      if (routerGB < 2) {if (starlinkGB < 2)
         deviationPercent = 0
         status = 'GREEN'
       } else {

@@ -54,6 +54,10 @@ export async function GET() {
     const routerAge = minutesSince(status.last_seen_router);
     const starlinkAge = minutesSince(status.last_seen_starlink);
 
+    const apOnlineCount = Number(status.ap_online_count || 0);
+const apIsHealthy = apOnlineCount >= 5;
+const apProblemAge = minutesSince(status.ap_problem_since_at);
+
     const routerIsFresh =
       routerAge !== null && routerAge <= OFFLINE_AFTER_MINUTES;
 
@@ -150,11 +154,61 @@ export async function GET() {
       updates.last_starlink_2h_alert_at = new Date().toISOString();
     }
 
+    if (!apIsHealthy && status.ap_healthy === true) {
+  await sendTelegramMessage(
+    `⚠️ AP WARNING\nShip: ${status.ship_id}\nAPs online: ${apOnlineCount}/5`
+  );
+
+  updates.ap_healthy = false;
+  updates.ap_problem_since_at = new Date().toISOString();
+  updates.last_ap_30m_alert_at = null;
+  updates.last_ap_2h_alert_at = null;
+}
+
+if (apIsHealthy && status.ap_healthy === false) {
+  await sendTelegramMessage(
+    `✅ APs wieder ONLINE\nShip: ${status.ship_id}\nAPs online: ${apOnlineCount}/5`
+  );
+
+  updates.ap_healthy = true;
+  updates.ap_problem_since_at = null;
+  updates.last_ap_30m_alert_at = null;
+  updates.last_ap_2h_alert_at = null;
+}
+
+if (
+  !apIsHealthy &&
+  status.ap_healthy === false &&
+  apProblemAge !== null &&
+  apProblemAge >= REMINDER_30_MINUTES &&
+  !status.last_ap_30m_alert_at
+) {
+  await sendTelegramMessage(
+    `⚠️ AP STILL WARNING seit 30 Minuten\nShip: ${status.ship_id}\nAPs online: ${apOnlineCount}/5`
+  );
+
+  updates.last_ap_30m_alert_at = new Date().toISOString();
+}
+
+if (
+  !apIsHealthy &&
+  status.ap_healthy === false &&
+  apProblemAge !== null &&
+  apProblemAge >= REMINDER_2_HOURS &&
+  !status.last_ap_2h_alert_at
+) {
+  await sendTelegramMessage(
+    `⚠️ AP STILL WARNING seit 2 Stunden\nShip: ${status.ship_id}\nAPs online: ${apOnlineCount}/5`
+  );
+
+  updates.last_ap_2h_alert_at = new Date().toISOString();
+}
+
     if (Object.keys(updates).length > 0) {
       const { error: updateError } = await supabase
         .from("router_status")
         .update(updates)
-        .eq("id", status.id);
+        .eq("ship_id", status.ship_id);
 
       if (updateError) {
         console.error("router-status-cron update error:", updateError);
