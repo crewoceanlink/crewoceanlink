@@ -4,7 +4,7 @@ const resources = [
   {
     title: "Crew Guide",
     description: "Internet access and voucher usage for crew members.",
-    file: "/resources/guides/crew-internet-guide.png",
+    file: "https://crewoceanlink.com/resources/guides/crew-internet-guide.png",
   },
   {
     title: "Crew Partner Guide",
@@ -20,11 +20,6 @@ const resources = [
     title: "Dish Mount Guide",
     description: "Satellite dish railing mount and cable routing.",
     file: "https://crewoceanlink.com/resources/guides/satellite-dish-mount-guide.png",
-  },
-  {
-    title: "Captive Login Guide",
-    description: "How crew members connect with voucher access.",
-    file: "https://crewoceanlink.com/resources/guides/captive-login-guide.png",
   },
   {
     title: "Crew Partner Application",
@@ -49,12 +44,12 @@ const resources = [
   {
     title: "Small Crew Pricing",
     description: "Voucher pricing for small crews.",
-    file: "https://crewoceanlink.com/resources/pricing/small-crew-package-pricing.jpeg",
+    file: "https://crewoceanlink.com/resources/pricing/small-crew-packages-pricing.jpeg",
   },
   {
     title: "Large Crew Pricing",
     description: "Voucher pricing for large crews.",
-    file: "https://crewoceanlink.com/resources/pricing/large-crew-package-pricing.jpeg",
+    file: "https://crewoceanlink.com/resources/pricing/large-crew-packages-pricing.jpeg",
   },
 ];
 

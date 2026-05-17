@@ -28,10 +28,10 @@ const dashboardResources = [
     title: "Dish Mount",
     file: "https://crewoceanlink.com/resources/guides/satellite-dish-mount-guide.png",
   },
-  {
-    title: "Captive Login",
-    file: "https://crewoceanlink.com/resources/guides/captive-login-guide.png",
-  },
+{
+  title: "Plug & Play",
+  file: "https://crewoceanlink.com/resources/marketing/plug-and-play-system.png",
+},
 ];
 
 const DEFAULT_USD_PER_EUR = 1 / 0.85;
