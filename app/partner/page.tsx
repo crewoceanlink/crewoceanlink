@@ -706,15 +706,17 @@ onBlur={(e) => saveAssignedName(voucher, e.target.value)}
                           />
                         </div>
 
-                        <div
-                          className={`rounded-full px-4 py-1.5 text-sm font-semibold whitespace-nowrap ${
-                            isNearLimit
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-green-100 text-green-700"
-                          }`}
-                        >
-                          {voucher.status}
-                        </div>
+<div
+  className={`rounded-full px-4 py-1.5 text-sm font-semibold whitespace-nowrap ${
+    String(voucher.status || "").toLowerCase() === "exhausted"
+      ? "bg-red-100 text-red-700"
+      : isNearLimit
+        ? "bg-amber-100 text-amber-800"
+        : "bg-green-100 text-green-700"
+  }`}
+>
+  {voucher.status}
+</div>
                       </div>
 
                       <div className="mt-3">

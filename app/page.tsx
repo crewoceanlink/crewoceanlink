@@ -2661,9 +2661,15 @@ return (
 </div>
 
                 <div className="col-span-2 text-right">
-                  <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
-                    {voucher.status}
-                  </span>
+<span
+  className={`px-3 py-1 rounded-full text-sm ${
+    String(voucher.status || "").toLowerCase() === "exhausted"
+      ? "bg-red-100 text-red-700"
+      : "bg-green-100 text-green-700"
+  }`}
+>
+  {voucher.status}
+</span>
                 </div>
               </div>
 
