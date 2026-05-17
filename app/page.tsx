@@ -694,16 +694,9 @@ if (error) {
   return;
 }
 
-try {
-  await fetch("/api/router/mikrotik-vouchers", {
-    method: "GET",
-    headers: {
-      "x-router-sync-token": process.env.NEXT_PUBLIC_ROUTER_SYNC_TOKEN || "",
-    },
-  });
-} catch (syncError) {
-  console.error("MIKROTIK VOUCHER SYNC ERROR:", syncError);
-}
+// MikroTik voucher sync disabled.
+// The old /api/router/mikrotik-vouchers route no longer exists.
+// Do not expose router sync tokens in frontend code.
 
 const codesArray = vouchers.map(v => v.voucher_code);
   const codesText = codesArray.join("\n");

@@ -83,14 +83,8 @@ if (updateError) {
   });
 }
 
-try {
-  const host = req.headers.host;
-  const protocol = host?.includes("localhost") ? "http" : "https";
-
-  await fetch(`${protocol}://${host}/api/router/mikrotik-vouchers?token=${process.env.ROUTER_SYNC_TOKEN}`);
-} catch (syncError) {
-  console.error("MIKROTIK SYNC AFTER USAGE ERROR:", syncError);
-}
+// MikroTik voucher sync disabled.
+// The old /api/router/mikrotik-vouchers route no longer exists.
 
 return res.status(200).json({
       ok: true,

@@ -41,6 +41,15 @@ const getCrewPriceUSD = (planType: string, size: string) => {
 
 export async function POST(req: Request) {
   try {
+    const cookie = req.headers.get("cookie") || "";
+
+    if (!cookie.includes("admin_auth=true")) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const { order_id } = await req.json();
 
     if (!order_id) {
