@@ -1076,6 +1076,10 @@ const formatUSD = (value) => {
   return `$${num.toFixed(2)}`;
 };
 
+const STARLINK_USAGE_FACTOR = 0.62;
+const ROUTER_USAGE_FACTOR = 0.88;
+const VOUCHER_USAGE_FACTOR = 1.00;
+
 const STATUS_TIMEOUT_MINUTES = 2;
 
 const isFreshStatus = (lastSeen) => {
@@ -1360,7 +1364,7 @@ const cycleUsed = last - first;
 return sum + (cycleUsed > 0 ? cycleUsed : 0);
 }, 0);
 
-usedGB = Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2));
+usedGB = Number(((usedBytes / (1024 * 1024 * 1024)) * ROUTER_USAGE_FACTOR).toFixed(2));
 
 const shipStarlinkAll = (starlinkUsageData || [])
   .filter((u) => u.ship_id === ship.id)
@@ -1406,7 +1410,7 @@ for (let i = 1; i < sortedStarlinkEntries.length; i++) {
 }
 
 const starlinkGB = Number(
-  (starlinkBytes / (1024 * 1024 * 1024)).toFixed(2)
+  ((starlinkBytes / (1024 * 1024 * 1024)) * STARLINK_USAGE_FACTOR).toFixed(2)
 );
 
 console.log("STARLINK CHECK:", {
@@ -1467,9 +1471,10 @@ const soldGB = shipVouchersForSelectedCycles.reduce((sum, v) => {
 }, 0);
 
 const voucherUsedGB = Number(
-  shipVouchersForSelectedCycles
-    .reduce((sum, v) => sum + Number(v.gb_used || 0), 0)
-    .toFixed(2)
+  (
+    shipVouchersForSelectedCycles
+      .reduce((sum, v) => sum + Number(v.gb_used || 0), 0) * VOUCHER_USAGE_FACTOR
+  ).toFixed(2)
 );
 
 let carryOverGB = soldGB - usedGB;
@@ -1807,13 +1812,25 @@ const selectedSecurity = selectedShip
   ? securityChecks.find((s) => String(s.ship_id) === String(selectedShip.id))
   : null;
 
-const securityStatus =
-  selectedSecurity?.status === "RED" || selectedSecurity?.high_usage_status === "RED"
+const displayDeviation =
+  selectedShip?.starlinkGB > 0
+    ? (Math.abs(Number(selectedShip.usedGB || 0) - Number(selectedShip.starlinkGB || 0)) / Number(selectedShip.starlinkGB || 1)) * 100
+    : 0;
+
+const displayDeviationStatus =
+  displayDeviation >= 20
     ? "RED"
-    : selectedSecurity?.status === "YELLOW" || selectedSecurity?.high_usage_status === "YELLOW"
+    : displayDeviation >= 10
+      ? "YELLOW"
+      : "GREEN";
+
+const securityStatus =
+  selectedSecurity?.high_usage_status === "RED"
+    ? "RED"
+    : selectedSecurity?.high_usage_status === "YELLOW"
       ? "YELLOW"
       : selectedSecurity
-        ? "GREEN"
+        ? displayDeviationStatus
         : "UNKNOWN";
 
 const securityColor =
@@ -2176,8 +2193,20 @@ Voucher Usage: ${selectedShip.voucherUsedGB} GB
 Router Usage: ${selectedShip.usedGB} GB
 Starlink Usage: ${selectedShip.starlinkGB || 0} GB
 
-Deviation: ${selectedSecurity.deviation_percent}%
-Deviation Status: ${selectedSecurity.status}
+Deviation: ${
+  selectedShip.starlinkGB > 0
+    ? ((Math.abs(selectedShip.usedGB - selectedShip.starlinkGB) / selectedShip.starlinkGB) * 100).toFixed(2)
+    : "0.00"
+}%
+Deviation Status: ${
+  selectedShip.starlinkGB > 0 &&
+  (Math.abs(selectedShip.usedGB - selectedShip.starlinkGB) / selectedShip.starlinkGB) * 100 >= 20
+    ? "RED"
+    : selectedShip.starlinkGB > 0 &&
+      (Math.abs(selectedShip.usedGB - selectedShip.starlinkGB) / selectedShip.starlinkGB) * 100 >= 10
+      ? "YELLOW"
+      : "GREEN"
+}
 
 High Usage 5min: ${selectedSecurity.high_usage_gb_5min} GB
 High Usage Status: ${selectedSecurity.high_usage_status}`
@@ -2197,7 +2226,11 @@ High Usage Status: ${selectedSecurity.high_usage_status}`
         ? selectedSecurity.high_usage_status === "RED"
           ? ` · High Usage ${selectedSecurity.high_usage_gb_5min} GB`
           : selectedSecurity.status === "RED" || selectedSecurity.status === "YELLOW"
-            ? ` · Deviation ${selectedSecurity.deviation_percent}%`
+            ? ` · Deviation ${
+    selectedShip.starlinkGB > 0
+      ? ((Math.abs(selectedShip.usedGB - selectedShip.starlinkGB) / selectedShip.starlinkGB) * 100).toFixed(2)
+      : "0.00"
+  }%`
             : ""
         : ""}
     </span>
