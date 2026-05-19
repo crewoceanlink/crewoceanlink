@@ -211,17 +211,8 @@ const result = {
         }
       }
 
-      if (status === 'RED') {
-        const cacheKey = `${ship.id}-RED`
-        const lastSent = globalThis.securityAlertCache[cacheKey] || 0
-        const now = Date.now()
-        const cooldownMs = 30 * 60 * 1000
-
-        if (now - lastSent > cooldownMs) {
-          globalThis.securityAlertCache[cacheKey] = now
-          await sendTelegramSecurityAlert(result)
-        }
-      }
+// Deviation Telegram alerts disabled for prototype.
+// High Usage alerts remain active.
     }
 
     return res.status(200).json({
